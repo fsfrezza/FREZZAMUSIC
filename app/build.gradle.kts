@@ -6,22 +6,20 @@ plugins {
 
 android {
     namespace = "com.frezzamusic.app"
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     compileSdk = 35
     defaultConfig {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.10.1"
+        versionCode = 12
+        versionName = "0.10.2"
     }
     buildFeatures { compose = true; buildConfig = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
