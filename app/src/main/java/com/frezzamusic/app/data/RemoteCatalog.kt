@@ -4,8 +4,8 @@ import com.frezzamusic.app.model.*
 
 interface RemoteCatalog { suspend fun artists():List<Artist>; suspend fun tracks()=artists().flatMap{it.albums}.flatMap{it.tracks} }
 
-private data class RawAlbum(val id:String,val title:String,val folderId:String,val coverId:String?,val tracks:List<Pair<String,String>>)
-private fun album(artist:String,r:RawAlbum)=Album(r.id,r.title,artist,r.coverId?.let{"https://drive.google.com/uc?export=view&id=$it"},r.tracks.mapIndexed{i,(fid,name)-> Track("remote:$artist:${r.id}:$fid",name.substringAfter(" - ").substringAfter(". ").removeSuffix(".mp3"),artist,r.title,"",source=TrackSource.ONLINE_FREE,trackNumber=i+1,remoteFileId=fid)})
+internal data class RawAlbum(val id:String,val title:String,val folderId:String,val coverId:String?,val tracks:List<Pair<String,String>>)
+internal fun album(artist:String,r:RawAlbum)=Album(r.id,r.title,artist,r.coverId?.let{"https://drive.google.com/uc?export=view&id=$it"},r.tracks.mapIndexed{i,(fid,name)-> Track("remote:$artist:${r.id}:$fid",name.substringAfter(" - ").substringAfter(". ").removeSuffix(".mp3"),artist,r.title,"",source=TrackSource.FREZZAMUSIC_STREAM,trackNumber=i+1,remoteFileId=fid)})
 
 /** Catálogo real inicial extraído das pastas fornecidas pelo proprietário. Novos discos podem ser acrescentados sem alterar o player. */
 class FrezzaDriveCatalog:RemoteCatalog {
@@ -20,6 +20,8 @@ class FrezzaDriveCatalog:RemoteCatalog {
    RawAlbum("genesis","Gênesis","1EEhJqN1k36sCVvnDLHcAzcr6OpgQ9SgO","1TMdUvN5D-lO8kyYzw7gPiTm2zEQlLww6",listOf("1Zbjh9GxBkqXCex4kztBYUYR8j9ExdDgw" to "01 - CRIAÇÃO.mp3","1gHE2YezWs_NY8vby0JoI9m05lBzKC51W" to "02 - MULHER.mp3","1UdWx4mwx5ksqUnIUEIUg4pntaRPVPc0l" to "03 - QUEDA.mp3","1PxXQrq-LttqvOMWhpsNKPFbEeP6OwhEo" to "04 - SEMENTES.mp3","1WVCGxjNW6FF8hGpTTO_2C7Q2tT9cwbI5" to "05 - RENOVAÇÃO.mp3","1XuCl42GBeZaK3YVWUxsIakfM4cfL4aV_" to "06 - BABEL.mp3","1vg3f1NIFqOb3wAQ7Q6b9B9Tye8YbGxau" to "07 - PAI DE NAÇÕES.mp3","14fnPNnaPJPj5LSYah0mx1AM6RPe7eVrW" to "08 - PROMETIDO.mp3","1RBpBbfCurJefRqPw-ZGn8mzQzQCQW6rG" to "09 - ELEITO.mp3","1Vhcfqf8EGETv82m174PB9ZJlIotrgQ4f" to "10 - SONHADOR.mp3","1EiixV7RteYC4h_esaPSRYQ1gC0l53P_3" to "11 - GÊNESIS.mp3")),
    RawAlbum("reforma-metal","Reforma Metal","13xpkuefYVwB-ns4a5hYIAkk4smy0Ixyc","1evH1ZyekL8rKgiXw9yjm4RxCFBeJAGWZ",listOf("1f6sVvupRR8pyTWz8ICiR3RbKbXRvCfSh" to "01 - POST TENEBRAS LUX.mp3","1PBd8_PAKKey-11s9JKmlKhV8ZyZ_k31p" to "02 - O MONGE REFORMADOR.mp3","19jlIwu30iptKV9SPTDZyrqDxXCJ8ufiD" to "03 - SOMENTE PELA GRAÇA.mp3","1YN_ddDwcfS8bGonkRvWM-hmSHMmSs9YB" to "04 - O DESPERTAR DE WITTENBERG.mp3","1DK3TZzvXL2ZtcYw1tePPLOevOYvNmg6u" to "05 - SOMENTE A ESCRITURA.mp3","1J15EI2Krq0EPOHkelQtb-u8HmgjLmeMp" to "06 - A PALAVRA FEZ TUDO.mp3","1prXTMuonZRl7C0JHjWx_3Kg1ma0jWj5B" to "07 - CORDEIRO MEDIADOR.mp3","1H8aiUs1ZcDQvsjJckQpFaQim6i7jLawP" to "08 - HERDEIROS DA PALAVRA.mp3","16XpWBK3r89jVyrcBI-LZv6RBT3Jd6IMC" to "09 - PELA FÉ.mp3","16DHdOIJrEUwutGZ9kHqJzzL1vkeBcv05" to "10 - ECO DAS NAÇÕES.mp3","1hK8Er-OyZZ1mjFJ6_wWQDSJnB7hR4osD" to "11 - SOMENTE A DEUS A GLÓRIA.mp3","1jkW-Pm71_1JMM_vNYFaA48TFZ-vZhuu5" to "12 - CASTELO FORTE (cover).mp3"))
   )
-  return listOf(Artist("thefrezza","theFrezza",frezza.map{album("theFrezza",it)}),Artist("solasias","Solasias",solasias.map{album("Solasias",it)}))
+  val allFrezza = frezza + CatalogExpansion.theFrezza()
+  val allSolasias = solasias + CatalogExpansion.solasias()
+  return listOf(Artist("thefrezza","theFrezza",allFrezza.map{album("theFrezza",it)}, virtualProject=true, description="Projeto musical virtual"),Artist("solasias","Solasias",allSolasias.map{album("Solasias",it)}, virtualProject=true, description="Projeto musical virtual"))
  }
 }

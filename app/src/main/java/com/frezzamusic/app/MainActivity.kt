@@ -22,6 +22,7 @@ import androidx.media3.common.Player
 import com.frezzamusic.app.data.*
 import com.frezzamusic.app.model.*
 import com.frezzamusic.app.player.PlaybackController
+import com.frezzamusic.app.ui.FullPlayer
 import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
+enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
 fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit) {
@@ -73,6 +74,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var playerExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         playback.onChanged = { changeCounter++ }
@@ -84,7 +86,12 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         loading = true
         roots = repo.folders()
         localTracks = withContext(Dispatchers.IO) { repo.scan() }
-        artists = FrezzaDriveCatalog().artists()
+        artists = FrezzaDriveCatalog().artists().let { catalog ->
+            when (BuildConfig.ARTIST_FILTER) {
+                "" -> catalog
+                else -> catalog.filter { it.name.equals(BuildConfig.ARTIST_FILTER, ignoreCase = true) }
+            }
+        }
         loading = false
     }
 
@@ -105,7 +112,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                     track = currentTrack,
                     playing = controller?.isPlaying == true,
                     toggle = playback::toggle,
-                    expand = { tab = AppTab.HOME }
+                    expand = { if (currentTrack != null) playerExpanded = true }
                 )
                 NavigationBar {
                     val tabs = listOf(
@@ -113,6 +120,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                         AppTab.LIBRARY to Icons.Default.LibraryMusic,
                         AppTab.ONLINE to Icons.Default.Cloud,
                         AppTab.PLAYLISTS to Icons.Default.PlaylistPlay,
+                        AppTab.NEWS to Icons.Default.Newspaper,
                         AppTab.MORE to Icons.Default.MoreHoriz
                     )
                     tabs.forEach { (item, icon) ->
@@ -132,8 +140,14 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
-                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks)
+                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
+                AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ })
+            }
+            if (playerExpanded) {
+                Surface(Modifier.fillMaxSize()) {
+                    FullPlayer(currentTrack, playback, onClose = { playerExpanded = false })
+                }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
@@ -145,7 +159,7 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
     val favorites = user.favorites()
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("FREZZAMUSIC", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas")
         }
         item {
@@ -221,7 +235,7 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
             }
         } else {
             item {
-                Text("FREZZAMUSIC Online", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC Online" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("Streaming • catálogo remoto")
             }
             artists.forEach { artist ->
@@ -241,33 +255,87 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
 }
 
 @Composable
-private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>) {
+private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, playback: PlaybackController) {
     var name by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<UserPlaylist?>(null) }
+    var revision by remember { mutableIntStateOf(0) }
+    val playlist = selected?.let { target -> user.playlists().find { it.id == target.id } }
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
-        item {
-            Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova playlist") })
-                IconButton(onClick = {
-                    if (name.isNotBlank()) {
-                        user.savePlaylist(UserPlaylist(System.currentTimeMillis().toString(), name))
-                        name = ""
-                    }
-                }) { Icon(Icons.Default.Add, null) }
+        if (playlist != null) {
+            item {
+                TextButton(onClick = { selected = null }) { Icon(Icons.Default.ArrowBack, null); Text("Playlists") }
+                Text(playlist.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                val tracks = playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }
+                Button(onClick = { tracks.firstOrNull()?.let { playback.play(it, tracks) } }, enabled = tracks.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text(" Reproduzir") }
+            }
+            items(playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }, key = { it.id }) { track ->
+                ListItem(headlineContent = { Text(track.title) }, supportingContent = { Text(track.artist) },
+                    trailingContent = { IconButton(onClick = { user.removeFromPlaylist(playlist.id, track.id); revision++ }) { Icon(Icons.Default.RemoveCircleOutline, null) } },
+                    modifier = Modifier.clickable { val tracks=playlist.trackIds.mapNotNull { id->all.find { it.id==id } }; playback.play(track, tracks) })
+            }
+        } else {
+            item {
+                Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova playlist") })
+                    IconButton(onClick = { if (name.isNotBlank()) { user.savePlaylist(UserPlaylist(System.currentTimeMillis().toString(), name)); name=""; revision++ } }) { Icon(Icons.Default.Add, null) }
+                }
+            }
+            items(user.playlists(), key = { it.id }) { p ->
+                ListItem(headlineContent = { Text(p.name) }, supportingContent = { Text("${p.trackIds.size} faixas") },
+                    leadingContent = { Icon(Icons.Default.PlaylistPlay, null) },
+                    trailingContent = { IconButton(onClick = { user.deletePlaylist(p.id); revision++ }) { Icon(Icons.Default.Delete, null) } },
+                    modifier = Modifier.clickable { selected = p })
+            }
+            item {
+                val ids=(0 until (playback.controller?.mediaItemCount?:0)).mapNotNull { playback.controller?.getMediaItemAt(it)?.mediaId }
+                OutlinedButton(onClick={ if(ids.isNotEmpty()){user.saveQueue(MusicQueue(System.currentTimeMillis().toString(),"Fila salva",ids));revision++}},enabled=ids.isNotEmpty()){
+                    Icon(Icons.Default.Save,null);Text(" Salvar fila atual")
+                }
+                Text("Filas salvas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+            }
+            items(user.queues(), key = { it.id }) { q ->
+                val tracks=q.trackIds.mapNotNull{id->all.find{it.id==id}}
+                ListItem(headlineContent={Text(q.name)},supportingContent={Text("${tracks.size} faixas")},leadingContent={Icon(Icons.Default.QueueMusic,null)},
+                    trailingContent={IconButton(onClick={user.deleteQueue(q.id);revision++}){Icon(Icons.Default.Delete,null)}},
+                    modifier=Modifier.clickable{tracks.firstOrNull()?.let{playback.play(it,tracks)}})
             }
         }
-        items(user.playlists(), key = { it.id }) { playlist ->
-            val count = playlist.trackIds.count { id -> all.any { it.id == id } }
-            ListItem(
-                headlineContent = { Text(playlist.name) },
-                supportingContent = { Text("$count faixas") },
-                leadingContent = { Icon(Icons.Default.PlaylistPlay, null) },
-                trailingContent = { IconButton(onClick = { user.deletePlaylist(playlist.id) }) { Icon(Icons.Default.Delete, null) } }
-            )
+    }
+}
+
+@Composable
+private fun NewsScreen() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val identity = remember { ProjectIdentities.forMode(BuildConfig.PROJECT_MODE) }
+    val news = remember { ReleaseRepository().announcements(BuildConfig.PROJECT_MODE) }
+    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text(identity.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text(identity.subtitle, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text(identity.about, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+            identity.editorialUrl?.let { url ->
+                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) {
+                    Icon(Icons.Default.Article, null); Spacer(Modifier.width(8.dp)); Text("Conteúdo editorial")
+                }
+            }
+            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
         }
-        item { Text("Filas salvas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
-        items(user.queues(), key = { it.id }) { queue ->
-            ListItem(headlineContent = { Text(queue.name) }, supportingContent = { Text("${queue.trackIds.size} faixas") }, leadingContent = { Icon(Icons.Default.QueueMusic, null) })
+        items(news, key = { it.id }) { item ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (item.type == NewsType.BLOG_POST) Icons.Default.Article else Icons.Default.Campaign, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text(item.artist + (item.releaseDate?.let { " • $it" } ?: ""), style = MaterialTheme.typography.labelMedium)
+                    Text(item.message, modifier = Modifier.padding(top = 8.dp))
+                    item.externalUrl?.let { url ->
+                        TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("Abrir") }
+                    }
+                }
+            }
         }
     }
 }
@@ -292,7 +360,7 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             HorizontalDivider()
             ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Estrutura preparada para letras embutidas/arquivos sincronizados") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
             ListItem(headlineContent = { Text("Áudio") }, supportingContent = { Text("Media3 • gapless quando suportado • velocidade e crossfade preparados para evolução") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
-            ListItem(headlineContent = { Text("HQ") }, supportingContent = { Text("ONLINE_HQ exige autorização futura do backend; não há bypass local") }, leadingContent = { Icon(Icons.Default.Lock, null) })
+            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Download, null) })
         }
     }
 }

@@ -11,8 +11,32 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.10.2"
+        versionCode = 20
+        versionName = "0.20.0"
+    }
+    flavorDimensions += "project"
+    productFlavors {
+        create("frezzamusic") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.app"
+            resValue("string", "app_name", "FREZZAMUSIC")
+            buildConfigField("String", "PROJECT_MODE", "\"FREZZAMUSIC\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"\"")
+        }
+        create("solasias") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.solasias"
+            resValue("string", "app_name", "Solasias")
+            buildConfigField("String", "PROJECT_MODE", "\"SOLASIAS\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"Solasias\"")
+        }
+        create("thefrezza") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.thefrezza"
+            resValue("string", "app_name", "theFrezza")
+            buildConfigField("String", "PROJECT_MODE", "\"THEFREZZA\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"theFrezza\"")
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
