@@ -5,7 +5,7 @@ import com.frezzamusic.app.model.*
 interface RemoteCatalog { suspend fun artists():List<Artist>; suspend fun tracks()=artists().flatMap{it.albums}.flatMap{it.tracks} }
 
 private data class RawAlbum(val id:String,val title:String,val folderId:String,val coverId:String?,val tracks:List<Pair<String,String>>)
-private fun album(artist:String,r:RawAlbum)=Album(r.id,r.title,artist,r.coverId?.let{"https://drive.google.com/uc?export=view&id=$it"},r.tracks.mapIndexed{i,(fid,name)-> Track("remote:$artist:${r.id}:$fid",name.substringAfter(" - ").substringAfter(". ").removeSuffix(".mp3"),artist,r.title,"",source=TrackSource.ONLINE_FREE,trackNumber=i+1,remoteFileId=fid)})
+private fun album(artist:String,r:RawAlbum)=Album(r.id,r.title,artist,r.coverId?.let{"https://drive.google.com/uc?export=view&id=$it"},r.tracks.mapIndexed{i,(fid,name)-> Track("remote:$artist:${r.id}:$fid",name.substringAfter(" - ").substringAfter(". ").removeSuffix(".mp3"),artist,r.title,"",source=TrackSource.FREZZAMUSIC_STREAM,trackNumber=i+1,remoteFileId=fid)})
 
 /** Catálogo real inicial extraído das pastas fornecidas pelo proprietário. Novos discos podem ser acrescentados sem alterar o player. */
 class FrezzaDriveCatalog:RemoteCatalog {
