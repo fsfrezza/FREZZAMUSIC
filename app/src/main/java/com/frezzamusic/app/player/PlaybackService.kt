@@ -1,17 +1,21 @@
 package com.frezzamusic.app.player
-import android.media.audiofx.Equalizer\nimport android.media.audiofx.Visualizer
+import android.media.audiofx.Equalizer
+import android.media.audiofx.Visualizer
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.*
 
 class PlaybackService:MediaSessionService(){
  private var session:MediaSession?=null
- private var eq:Equalizer?=null\n private var visualizer:Visualizer?=null
+ private var eq:Equalizer?=null
+ private var visualizer:Visualizer?=null
  companion object {
   @Volatile var audioSessionId:Int=0; private set
   @Volatile var equalizerAvailable:Boolean=false; private set
   @Volatile var currentPreset:Short=-1; private set
-  @Volatile var presetNames:List<String> = emptyList(); private set\n  @Volatile var spectrum:List<Int> = emptyList(); private set\n  @Volatile var visualizerAvailable:Boolean=false; private set
+  @Volatile var presetNames:List<String> = emptyList(); private set
+  @Volatile var spectrum:List<Int> = emptyList(); private set
+  @Volatile var visualizerAvailable:Boolean=false; private set
   private var instance:PlaybackService?=null
   fun setEqualizerPreset(index:Int):Boolean = instance?.applyPreset(index) ?: false
   fun disableEqualizer(){instance?.eq?.enabled=false;currentPreset=-1}
