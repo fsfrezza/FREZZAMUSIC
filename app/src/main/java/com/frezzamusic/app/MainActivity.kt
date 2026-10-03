@@ -22,6 +22,7 @@ import androidx.media3.common.Player
 import com.frezzamusic.app.data.*
 import com.frezzamusic.app.model.*
 import com.frezzamusic.app.player.PlaybackController
+import com.frezzamusic.app.ui.FullPlayer
 import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +74,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var playerExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         playback.onChanged = { changeCounter++ }
@@ -110,7 +112,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                     track = currentTrack,
                     playing = controller?.isPlaying == true,
                     toggle = playback::toggle,
-                    expand = { tab = AppTab.HOME }
+                    expand = { if (currentTrack != null) playerExpanded = true }
                 )
                 NavigationBar {
                     val tabs = listOf(
@@ -140,6 +142,11 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks)
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ })
             }
+            if (playerExpanded) {
+                Surface(Modifier.fillMaxSize()) {
+                    FullPlayer(currentTrack, playback, onClose = { playerExpanded = false })
+                }
+            }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
     }
@@ -150,7 +157,7 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
     val favorites = user.favorites()
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("FREZZAMUSIC", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas")
         }
         item {
@@ -226,7 +233,7 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
             }
         } else {
             item {
-                Text("FREZZAMUSIC Online", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC Online" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("Streaming • catálogo remoto")
             }
             artists.forEach { artist ->
@@ -297,7 +304,7 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             HorizontalDivider()
             ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Estrutura preparada para letras embutidas/arquivos sincronizados") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
             ListItem(headlineContent = { Text("Áudio") }, supportingContent = { Text("Media3 • gapless quando suportado • velocidade e crossfade preparados para evolução") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
-            ListItem(headlineContent = { Text("HQ") }, supportingContent = { Text("ONLINE_HQ exige autorização futura do backend; não há bypass local") }, leadingContent = { Icon(Icons.Default.Lock, null) })
+            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Download, null) })
         }
     }
 }
