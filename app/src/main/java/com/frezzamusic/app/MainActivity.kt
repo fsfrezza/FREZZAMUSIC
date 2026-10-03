@@ -139,7 +139,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
-                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks)
+                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ })
             }
@@ -254,33 +254,51 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
 }
 
 @Composable
-private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>) {
+private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, playback: PlaybackController) {
     var name by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<UserPlaylist?>(null) }
+    var revision by remember { mutableIntStateOf(0) }
+    val playlist = selected?.let { target -> user.playlists().find { it.id == target.id } }
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
-        item {
-            Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova playlist") })
-                IconButton(onClick = {
-                    if (name.isNotBlank()) {
-                        user.savePlaylist(UserPlaylist(System.currentTimeMillis().toString(), name))
-                        name = ""
-                    }
-                }) { Icon(Icons.Default.Add, null) }
+        if (playlist != null) {
+            item {
+                TextButton(onClick = { selected = null }) { Icon(Icons.Default.ArrowBack, null); Text("Playlists") }
+                Text(playlist.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                val tracks = playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }
+                Button(onClick = { tracks.firstOrNull()?.let { playback.play(it, tracks) } }, enabled = tracks.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text(" Reproduzir") }
             }
-        }
-        items(user.playlists(), key = { it.id }) { playlist ->
-            val count = playlist.trackIds.count { id -> all.any { it.id == id } }
-            ListItem(
-                headlineContent = { Text(playlist.name) },
-                supportingContent = { Text("$count faixas") },
-                leadingContent = { Icon(Icons.Default.PlaylistPlay, null) },
-                trailingContent = { IconButton(onClick = { user.deletePlaylist(playlist.id) }) { Icon(Icons.Default.Delete, null) } }
-            )
-        }
-        item { Text("Filas salvas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
-        items(user.queues(), key = { it.id }) { queue ->
-            ListItem(headlineContent = { Text(queue.name) }, supportingContent = { Text("${queue.trackIds.size} faixas") }, leadingContent = { Icon(Icons.Default.QueueMusic, null) })
+            items(playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }, key = { it.id }) { track ->
+                ListItem(headlineContent = { Text(track.title) }, supportingContent = { Text(track.artist) },
+                    trailingContent = { IconButton(onClick = { user.removeFromPlaylist(playlist.id, track.id); revision++ }) { Icon(Icons.Default.RemoveCircleOutline, null) } },
+                    modifier = Modifier.clickable { val tracks=playlist.trackIds.mapNotNull { id->all.find { it.id==id } }; playback.play(track, tracks) })
+            }
+        } else {
+            item {
+                Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova playlist") })
+                    IconButton(onClick = { if (name.isNotBlank()) { user.savePlaylist(UserPlaylist(System.currentTimeMillis().toString(), name)); name=""; revision++ } }) { Icon(Icons.Default.Add, null) }
+                }
+            }
+            items(user.playlists(), key = { it.id }) { p ->
+                ListItem(headlineContent = { Text(p.name) }, supportingContent = { Text("${p.trackIds.size} faixas") },
+                    leadingContent = { Icon(Icons.Default.PlaylistPlay, null) },
+                    trailingContent = { IconButton(onClick = { user.deletePlaylist(p.id); revision++ }) { Icon(Icons.Default.Delete, null) } },
+                    modifier = Modifier.clickable { selected = p })
+            }
+            item {
+                val ids=(0 until (playback.controller?.mediaItemCount?:0)).mapNotNull { playback.controller?.getMediaItemAt(it)?.mediaId }
+                OutlinedButton(onClick={ if(ids.isNotEmpty()){user.saveQueue(MusicQueue(System.currentTimeMillis().toString(),"Fila salva",ids));revision++}},enabled=ids.isNotEmpty()){
+                    Icon(Icons.Default.Save,null);Text(" Salvar fila atual")
+                }
+                Text("Filas salvas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+            }
+            items(user.queues(), key = { it.id }) { q ->
+                val tracks=q.trackIds.mapNotNull{id->all.find{it.id==id}}
+                ListItem(headlineContent={Text(q.name)},supportingContent={Text("${tracks.size} faixas")},leadingContent={Icon(Icons.Default.QueueMusic,null)},
+                    trailingContent={IconButton(onClick={user.deleteQueue(q.id);revision++}){Icon(Icons.Default.Delete,null)}},
+                    modifier=Modifier.clickable{tracks.firstOrNull()?.let{playback.play(it,tracks)}})
+            }
         }
     }
 }
