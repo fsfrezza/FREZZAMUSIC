@@ -84,7 +84,12 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         loading = true
         roots = repo.folders()
         localTracks = withContext(Dispatchers.IO) { repo.scan() }
-        artists = FrezzaDriveCatalog().artists()
+        artists = FrezzaDriveCatalog().artists().let { catalog ->
+            when (BuildConfig.ARTIST_FILTER) {
+                "" -> catalog
+                else -> catalog.filter { it.name.equals(BuildConfig.ARTIST_FILTER, ignoreCase = true) }
+            }
+        }
         loading = false
     }
 
