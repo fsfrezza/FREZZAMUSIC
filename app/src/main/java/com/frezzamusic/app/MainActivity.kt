@@ -120,6 +120,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                         AppTab.LIBRARY to Icons.Default.LibraryMusic,
                         AppTab.ONLINE to Icons.Default.Cloud,
                         AppTab.PLAYLISTS to Icons.Default.PlaylistPlay,
+                        AppTab.NEWS to Icons.Default.Newspaper,
                         AppTab.MORE to Icons.Default.MoreHoriz
                     )
                     tabs.forEach { (item, icon) ->
