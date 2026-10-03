@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
+enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
 fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit) {
@@ -280,6 +280,42 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>) {
         item { Text("Filas salvas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp)) }
         items(user.queues(), key = { it.id }) { queue ->
             ListItem(headlineContent = { Text(queue.name) }, supportingContent = { Text("${queue.trackIds.size} faixas") }, leadingContent = { Icon(Icons.Default.QueueMusic, null) })
+        }
+    }
+}
+
+@Composable
+private fun NewsScreen() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val identity = remember { ProjectIdentities.forMode(BuildConfig.PROJECT_MODE) }
+    val news = remember { ReleaseRepository().announcements(BuildConfig.PROJECT_MODE) }
+    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text(identity.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text(identity.subtitle, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text(identity.about, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+            identity.editorialUrl?.let { url ->
+                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) {
+                    Icon(Icons.Default.Article, null); Spacer(Modifier.width(8.dp)); Text("Conteúdo editorial")
+                }
+            }
+            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
+        }
+        items(news, key = { it.id }) { item ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (item.type == NewsType.BLOG_POST) Icons.Default.Article else Icons.Default.Campaign, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text(item.artist + (item.releaseDate?.let { " • $it" } ?: ""), style = MaterialTheme.typography.labelMedium)
+                    Text(item.message, modifier = Modifier.padding(top = 8.dp))
+                    item.externalUrl?.let { url ->
+                        TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("Abrir") }
+                    }
+                }
+            }
         }
     }
 }
