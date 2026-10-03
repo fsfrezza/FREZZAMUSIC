@@ -18,6 +18,6 @@ class ReleaseRepository {
     "Acompanhe a discografia e os conteúdos editoriais do projeto musical virtual.",type=NewsType.BLOG_POST,
     externalUrl=EditorialSources.SOLASIAS_BLOG_ALBUMS)
   )
-  return when(projectMode){"SOLASIAS"->solasias+"".let{common};"THEFREZZA"->common;else->common+solasias}
+  return when(projectMode){"SOLASIAS"->solasias+common;"THEFREZZA"->common;else->common+solasias}
  }
 }
