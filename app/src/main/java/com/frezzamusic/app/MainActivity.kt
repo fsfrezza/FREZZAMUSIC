@@ -146,7 +146,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
-                    FullPlayer(currentTrack, playback, onClose = { playerExpanded = false })
+                    FullPlayer(currentTrack, playback, user, onClose = { playerExpanded = false })
                 }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -179,7 +179,7 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
 @Composable
 private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository) {
     val modes = listOf("Músicas", "Artistas", "Álbuns", "Gêneros", "Pastas")
-    var mode by remember { mutableStateOf(modes.first()) }
+    var mode by remember { mutableStateOf(modes.first()) }\n    var sort by remember { mutableStateOf("Título") }
     val filtered = tracks.filter { track ->
         query.isBlank() || listOf(track.title, track.artist, track.album, track.genre.orEmpty()).any { it.contains(query, ignoreCase = true) }
     }
@@ -192,7 +192,7 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
             label = { Text("Buscar biblioteca") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
-        ScrollableTabRow(selectedTabIndex = modes.indexOf(mode)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text("Ordenar: "); listOf("Título","Artista","Álbum").forEach { option -> FilterChip(selected=sort==option,onClick={sort=option},label={Text(option)},modifier=Modifier.padding(end=6.dp)) } }\n        ScrollableTabRow(selectedTabIndex = modes.indexOf(mode)) {
             modes.forEach { item ->
                 androidx.compose.material3.Tab(
                     selected = mode == item,
