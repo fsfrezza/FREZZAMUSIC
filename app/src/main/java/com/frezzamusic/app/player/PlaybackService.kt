@@ -24,7 +24,7 @@ class PlaybackService:MediaSessionService(){
   super.onCreate();instance=this
   val p=ExoPlayer.Builder(this).build()
   p.addListener(object:Player.Listener{
-   override fun onPlaybackStateChanged(state:Int){if(state==Player.STATE_READY) attachEqualizer(p.audioSessionId)}
+   override fun onPlaybackStateChanged(state:Int){if(state==Player.STATE_READY){attachEqualizer(p.audioSessionId);attachVisualizer(p.audioSessionId)}}
   })
   session=MediaSession.Builder(this,p).build()
  }
