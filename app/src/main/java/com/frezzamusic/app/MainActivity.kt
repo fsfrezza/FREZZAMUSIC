@@ -273,6 +273,15 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
                     trailingContent = { IconButton(onClick = { user.removeFromPlaylist(playlist.id, track.id); revision++ }) { Icon(Icons.Default.RemoveCircleOutline, null) } },
                     modifier = Modifier.clickable { val tracks=playlist.trackIds.mapNotNull { id->all.find { it.id==id } }; playback.play(track, tracks) })
             }
+            item { Text("Adicionar faixas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp)) }
+            items(all.filter { it.id !in playlist.trackIds }, key = { "add-" + it.id }) { track ->
+                ListItem(
+                    headlineContent = { Text(track.title) },
+                    supportingContent = { Text(track.artist + " • " + track.album) },
+                    leadingContent = { Icon(if (track.remote) Icons.Default.Cloud else Icons.Default.MusicNote, null) },
+                    trailingContent = { IconButton(onClick = { user.addToPlaylist(playlist.id, track.id); revision++ }) { Icon(Icons.Default.AddCircleOutline, "Adicionar") } }
+                )
+            }
         } else {
             item {
                 Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
