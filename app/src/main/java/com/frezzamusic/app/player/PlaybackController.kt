@@ -16,5 +16,7 @@ class PlaybackController(private val context:Context,private val resolver:Stream
  fun play(track:Track,queue:List<Track>){scope.launch{val start=queue.indexOfFirst{it.id==track.id}.coerceAtLeast(0);val items=queue.map{toItem(it)};controller?.apply{setMediaItems(items,start,0);prepare();play()}}}
  fun toggle(){controller?.let{if(it.isPlaying)it.pause() else it.play()}};fun next(){controller?.seekToNextMediaItem()};fun previous(){controller?.seekToPreviousMediaItem()};fun seek(ms:Long){controller?.seekTo(ms)}
  fun shuffle(){controller?.let{it.shuffleModeEnabled=!it.shuffleModeEnabled};onChanged?.invoke()};fun repeat(){controller?.let{it.repeatMode=when(it.repeatMode){Player.REPEAT_MODE_OFF->Player.REPEAT_MODE_ALL;Player.REPEAT_MODE_ALL->Player.REPEAT_MODE_ONE;else->Player.REPEAT_MODE_OFF}};onChanged?.invoke()}
+ fun setSpeed(speed:Float){controller?.setPlaybackSpeed(speed.coerceIn(.5f,2f));onChanged?.invoke()}
+ fun sleepTimer(minutes:Int){scope.launch{delay(minutes.coerceAtLeast(1)*60_000L);controller?.pause();onChanged?.invoke()}}
  private suspend fun toItem(t:Track):MediaItem{val u=if(t.remote)resolver.resolve(t).url else t.uri;return MediaItem.Builder().setMediaId(t.id).setUri(u).setMediaMetadata(MediaMetadata.Builder().setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album).setArtworkUri(t.artwork?.let(android.net.Uri::parse)).build()).build()}
 }
