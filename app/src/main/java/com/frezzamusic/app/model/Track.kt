@@ -14,6 +14,7 @@ data class Track(
     val source: TrackSource = TrackSource.LOCAL,
     val trackNumber: Int? = null,
     val durationMs: Long? = null,
+    val dateMs: Long? = null,
     val remoteFileId: String? = null,
     val genre: String? = null,
     val quality: AudioQuality = AudioQuality.UNKNOWN,
