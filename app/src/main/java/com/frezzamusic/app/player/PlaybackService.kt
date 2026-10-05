@@ -16,6 +16,7 @@ class PlaybackService:MediaSessionService(){
   @Volatile var currentPreset:Short=-1; private set
   @Volatile var presetNames:List<String> = emptyList(); private set
   @Volatile var spectrum:List<Int> = emptyList(); private set
+  @Volatile var waveform:List<Int> = emptyList(); private set
   @Volatile var visualizerAvailable:Boolean=false; private set
   @Volatile var visualizerEnabled:Boolean=true; private set
   private var instance:PlaybackService?=null
@@ -49,7 +50,7 @@ class PlaybackService:MediaSessionService(){
    visualizer=Visualizer(id).also{v->
     v.captureSize=Visualizer.getCaptureSizeRange()[0]
     v.setDataCaptureListener(object:Visualizer.OnDataCaptureListener{
-     override fun onWaveFormDataCapture(vis:Visualizer?,waveform:ByteArray?,rate:Int){}
+     override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){if(data!=null){val step=(data.size/48).coerceAtLeast(1);waveform=(0 until 48).map{i->data[(i*step).coerceAtMost(data.lastIndex)].toInt()}}}
      override fun onFftDataCapture(vis:Visualizer?,fft:ByteArray?,rate:Int){
       if(fft==null)return
       val bins=24;val step=(fft.size/2/bins).coerceAtLeast(1)
@@ -59,14 +60,14 @@ class PlaybackService:MediaSessionService(){
        kotlin.math.sqrt((re*re+im*im).toDouble()).toInt().coerceIn(0,128)
       }
      }
-    },Visualizer.getMaxCaptureRate()/2,false,true)
+    },Visualizer.getMaxCaptureRate()/2,true,true)
     v.enabled=visualizerEnabled;visualizerAvailable=true
    }
   }.onFailure{visualizerAvailable=false;spectrum=emptyList()}
  }
  private fun updateVisualizerState(){
   runCatching{visualizer?.enabled=visualizerEnabled}.onFailure{visualizerAvailable=false;spectrum=emptyList()}
-  if(!visualizerEnabled)spectrum=emptyList()
+  if(!visualizerEnabled){spectrum=emptyList();waveform=emptyList()}
  }
  private fun applyPreset(index:Int):Boolean{
   val e=eq?:return false
@@ -75,5 +76,5 @@ class PlaybackService:MediaSessionService(){
  }
  override fun onGetSession(controllerInfo:MediaSession.ControllerInfo)=session
  override fun onTaskRemoved(rootIntent:android.content.Intent?){if(session?.player?.playWhenReady!=true)stopSelf()}
- override fun onDestroy(){visualizer?.release();visualizer=null;visualizerSessionId=0;visualizerAvailable=false;spectrum=emptyList();eq?.release();eq=null;equalizerAvailable=false;audioSessionId=0;instance=null;session?.run{player.release();release()};session=null;super.onDestroy()}
+ override fun onDestroy(){visualizer?.release();visualizer=null;visualizerSessionId=0;visualizerAvailable=false;spectrum=emptyList();waveform=emptyList();eq?.release();eq=null;equalizerAvailable=false;audioSessionId=0;instance=null;session?.run{player.release();release()};session=null;super.onDestroy()}
 }
