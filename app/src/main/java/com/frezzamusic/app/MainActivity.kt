@@ -136,9 +136,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                     tabs.forEach { (item, icon) ->
                         NavigationBarItem(
                             selected = tab == item,
-                            onClick = { tab = item; selectedAlbum = null },
+                            onClick = { tab = item; selectedAlbum = null; playerExpanded = false },
                             icon = { Icon(icon, contentDescription = null) },
-                            label = { Text(item.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> "Externas"; AppTab.PLAYLISTS -> "Listas"; AppTab.NEWS -> "Novidades"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -148,7 +148,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(allTracks, query, { query = it }, { playback.play(it, allTracks) }, user)
+                AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
@@ -206,7 +206,7 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
             value = query,
             onValueChange = setQuery,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
-            label = { Text("Buscar biblioteca") },
+            label = { Text("Buscar mídias locais") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text("Ordenar: "); listOf("Título","Artista","Álbum").forEach { option -> FilterChip(selected=sort==option,onClick={sort=option},label={Text(option)},modifier=Modifier.padding(end=6.dp)) } }
@@ -242,33 +242,33 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
 
 @Composable
 private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository) {
-    LazyColumn(contentPadding = PaddingValues(16.dp)) {
-        if (album != null) {
+    val tracks = artists.flatMap { it.albums }.flatMap { it.tracks }
+    var mode by remember { mutableStateOf("Álbuns") }
+    var query by remember { mutableStateOf("") }
+    val filtered = tracks.filter { query.isBlank() || listOf(it.title,it.artist,it.album,it.genre.orEmpty()).any { s -> s.contains(query,true) } }
+    if(album != null) {
+        LazyColumn(contentPadding=PaddingValues(16.dp)) {
             item {
-                TextButton(onClick = back) { Icon(Icons.Default.ArrowBack, null); Text("Álbuns") }
-                Text(album.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick=back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")}
+                Card(Modifier.fillMaxWidth().aspectRatio(1.8f)) {
+                    val art=album.artwork ?: album.tracks.firstOrNull()?.artwork
+                    if(!art.isNullOrBlank()) AsyncImage(model=art,contentDescription="Capa de "+album.title,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
+                    else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp),tint=MaterialTheme.colorScheme.primary)}
+                }
+                Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp))
                 Text(album.artist)
             }
-            items(album.tracks, key = { it.id }) { track ->
-                TrackRow(track, user.favorites().contains(track.id), { play(track, album) }) { user.toggleFavorite(track.id) }
-            }
-        } else {
-            item {
-                Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC Online" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("Streaming • catálogo remoto")
-            }
-            artists.forEach { artist ->
-                item(key = "artist-${artist.name}") { Text(artist.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp)) }
-                items(artist.albums, key = { it.id }) { item ->
-                    ListItem(
-                        headlineContent = { Text(item.title) },
-                        supportingContent = { Text("${item.tracks.size} faixas") },
-                        leadingContent = { Icon(Icons.Default.Album, null) },
-                        trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                        modifier = Modifier.clickable { open(item) }
-                    )
-                }
-            }
+            items(album.tracks,key={it.id}) { track -> TrackRow(track,user.favorites().contains(track.id),{play(track,album)}){user.toggleFavorite(track.id)} }
+        }
+    } else Column {
+        OutlinedTextField(value=query,onValueChange={query=it},modifier=Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text("Buscar mídias externas")},leadingIcon={Icon(Icons.Default.Search,null)})
+        val modes=listOf("Músicas","Artistas","Álbuns","Gêneros")
+        ScrollableTabRow(selectedTabIndex=modes.indexOf(mode)){modes.forEach{m->Tab(selected=mode==m,onClick={mode=m},text={Text(m,maxLines=1)})}}
+        when(mode) {
+            "Músicas" -> LazyColumn { items(filtered,key={it.id}) { t -> val a=artists.flatMap{it.albums}.firstOrNull{x->x.id==t.album || x.title==t.album}; TrackRow(t,user.favorites().contains(t.id),{if(a!=null)play(t,a)}){user.toggleFavorite(t.id)} } }
+            "Artistas" -> LazyColumn { items(filtered.groupBy{it.artist}.toList(),key={it.first}) { (name,list) -> ListItem(headlineContent={Text(name)},supportingContent={Text(list.size.toString()+" faixas")},leadingContent={Icon(Icons.Default.Person,null)}) } }
+            "Gêneros" -> LazyColumn { items(filtered.groupBy{it.genre?:"Sem gênero"}.toList(),key={it.first}) { (name,list) -> ListItem(headlineContent={Text(name)},supportingContent={Text(list.size.toString()+" faixas")}) } }
+            else -> LazyColumn { artists.forEach { artist -> item(key="artist-"+artist.id){Text(artist.name,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,modifier=Modifier.padding(16.dp,16.dp,16.dp,6.dp))}; items(artist.albums.filter{a->query.isBlank()||a.title.contains(query,true)},key={it.id}) { a -> val art=a.artwork?:a.tracks.firstOrNull()?.artwork;ListItem(headlineContent={Text(a.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(a.tracks.size.toString()+" faixas")},leadingContent={if(!art.isNullOrBlank())AsyncImage(model=art,contentDescription=null,modifier=Modifier.size(64.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},trailingContent={Icon(Icons.Default.ChevronRight,null)},modifier=Modifier.clickable{open(a)}) } } }
         }
     }
 }
@@ -282,7 +282,7 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         if (playlist != null) {
             item {
-                TextButton(onClick = { selected = null }) { Icon(Icons.Default.ArrowBack, null); Text("Playlists") }
+                TextButton(onClick = { selected = null }) { Icon(Icons.Default.ArrowBack, null); Text("Listas") }
                 Text(playlist.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 val tracks = playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }
                 Button(onClick = { tracks.firstOrNull()?.let { playback.play(it, tracks) } }, enabled = tracks.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text(" Reproduzir") }
@@ -303,9 +303,9 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
             }
         } else {
             item {
-                Text("Playlists e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Listas e filas", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova playlist") })
+                    OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.weight(1f), label = { Text("Nova lista") })
                     IconButton(onClick = { if (name.isNotBlank()) { user.savePlaylist(UserPlaylist(System.currentTimeMillis().toString(), name)); name=""; revision++ } }) { Icon(Icons.Default.Add, null) }
                 }
             }
