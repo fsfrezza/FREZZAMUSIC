@@ -3,6 +3,9 @@ import android.content.Context
 import com.frezzamusic.app.model.*
 import org.json.*
 class UserLibraryRepository(context: Context) { private val p=context.getSharedPreferences("user_library",Context.MODE_PRIVATE)
+ fun artistImage(artist:String):String? = p.getString("artist_image:"+artist.lowercase(),null)
+ fun setArtistImage(artist:String,uri:String){p.edit().putString("artist_image:"+artist.lowercase(),uri).apply()}
+ fun clearArtistImage(artist:String){p.edit().remove("artist_image:"+artist.lowercase()).apply()}
  fun favorites():Set<String> = p.getStringSet("favorites", emptySet()) ?: emptySet()
  fun toggleFavorite(id:String){val s=favorites().toMutableSet();if(!s.add(id))s.remove(id);p.edit().putStringSet("favorites",s).apply()}
  fun playlists()=read("playlists").map{UserPlaylist(it.first,it.second.first,it.second.second)}
