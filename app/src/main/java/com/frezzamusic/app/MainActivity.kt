@@ -39,6 +39,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var folders: FolderMusicRepository
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var folderAdded: (() -> Unit)? = null
+    private var artistImagePicked: ((Uri) -> Unit)? = null
+    private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { try { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_:Exception){}; artistImagePicked?.invoke(it) } }
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri ?: return@registerForActivityResult
@@ -58,10 +60,8 @@ class MainActivity : ComponentActivity() {
             FrezzaTheme {
                 FrezzaMusicApp(
                     repo = folders,
-                    pickFolder = { callback ->
-                        folderAdded = callback
-                        picker.launch(null)
-                    }
+                    pickFolder = { callback -> folderAdded = callback; picker.launch(null) },
+                    pickArtistImage = { callback -> artistImagePicked = callback; imagePicker.launch(arrayOf("image/*")) }
                 )
             }
         }
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val playback = remember { PlaybackController(context, DevelopmentDriveStreamResolver(), user) }
@@ -148,7 +148,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user)
+                AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user, pickArtistImage)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
@@ -187,8 +187,8 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
 }
 
 @Composable
-private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository) {
-    val modes=listOf("Músicas","Artistas","Álbuns","Gêneros","Pastas")
+private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository, pickArtistImage: (((Uri) -> Unit)) -> Unit) {
+    val modes=listOf("Músicas","Artistas","Álbuns","Pastas")
     var mode by remember{mutableStateOf("Músicas")}; var sort by remember{mutableStateOf("Título")}; var ascending by remember{mutableStateOf(true)}; var artistFilter by remember{mutableStateOf("Todas")}; var artistMenu by remember{mutableStateOf(false)}; var sortMenu by remember{mutableStateOf(false)}
     val artistOptions=listOf("Todas")+tracks.map{it.artist}.distinct().sorted()
     val base=tracks.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||listOf(it.title,it.artist,it.album,it.genre.orEmpty()).any{s->s.contains(query,true)}}
@@ -201,9 +201,8 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
       ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
       LazyColumn{when(mode){
         "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)}){user.toggleFavorite(t.id)}}
-        "Artistas"->items(filtered.groupBy{it.artist}.toList(),key={it.first}){(n,l)->ListItem(headlineContent={Text(n)},supportingContent={Text("${l.size} faixas")},leadingContent={Icon(Icons.Default.Person,null)})}
+        "Artistas"->items(tracks.filter{query.isBlank()||it.artist.contains(query,true)}.groupBy{it.artist}.toList(),key={it.first}){(n,l)->val custom=user.artistImage(n);ElevatedCard(Modifier.padding(8.dp).fillMaxWidth().clickable{artistFilter=n;mode="Músicas"}){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){Card(Modifier.size(92.dp)){if(custom!=null)AsyncImage(custom,n,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(50.dp))}};Column(Modifier.weight(1f).padding(start=12.dp)){Text(n,fontWeight=FontWeight.Bold);Text("${l.size} faixas");TextButton(onClick={pickArtistImage{uri->user.setArtistImage(n,uri.toString())}}){Icon(Icons.Default.Image,null);Text(" Escolher logo")};if(custom!=null)TextButton(onClick={user.clearArtistImage(n)}){Text("Remover imagem")}}}}}
         "Álbuns"->items(filtered.groupBy{it.artist+" / "+it.album}.values.toList().let{groups->when(sort){"Artista"->groups.sortedBy{it.first().artist.lowercase()};"Data"->groups.sortedBy{it.maxOfOrNull{x->x.dateMs?:0L}?:0L};else->groups.sortedBy{it.first().album.lowercase()}}.let{if(ascending)it else it.reversed()}},key={it.first().artist+"/"+it.first().album}){l->val f=l.first();ListItem(headlineContent={Text(f.album,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(f.artist+" • "+l.size+" faixas")},leadingContent={if(!f.artwork.isNullOrBlank())AsyncImage(f.artwork,null,Modifier.size(56.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},modifier=Modifier.clickable{play(f)})}
-        "Gêneros"->items(filtered.groupBy{it.genre?:"Sem gênero"}.toList(),key={it.first}){(n,l)->ListItem(headlineContent={Text(n)},supportingContent={Text("${l.size} faixas")})}
         else->item{Text("As pastas autorizadas são administradas em Mais → Pastas.",Modifier.padding(20.dp))}
       }}
     }
@@ -215,10 +214,10 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
  if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t,album)}){user.toggleFavorite(t.id)}}}
  else Column{
   OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text("Buscar mídias externas")},leadingIcon={Icon(Icons.Default.Search,null)})
-  if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todas as bandas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todas as bandas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
-  val modes=listOf("Músicas","Artistas","Álbuns","Gêneros");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
+  if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todos os artistas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todos os artistas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
+  val modes=listOf("Músicas","Artistas","Álbuns");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
   val ft=tracks.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||listOf(it.title,it.artist,it.album).any{s->s.contains(query,true)}}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Álbum"->compareBy(String.CASE_INSENSITIVE_ORDER){it.album};"Data"->compareBy<Track>{it.dateMs?:0L};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()}
-  when(mode){"Músicas"->LazyColumn{items(ft,key={it.id}){t->val a=allAlbums.firstOrNull{x->x.title==t.album&&x.artist==t.artist};TrackRow(t,user.favorites().contains(t.id),{if(a!=null)play(t,a)}){user.toggleFavorite(t.id)}}};"Artistas"->LazyColumn{items(ft.groupBy{it.artist}.toList(),key={it.first}){(n,l)->ListItem(headlineContent={Text(n)},supportingContent={Text("${l.size} faixas")})}};"Gêneros"->LazyColumn{items(ft.groupBy{it.genre?:"Sem gênero"}.toList(),key={it.first}){(n,l)->ListItem(headlineContent={Text(n)},supportingContent={Text("${l.size} faixas")})}};else->{val fa=allAlbums.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||it.title.contains(query,true)}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Data"->compareBy<Album>{it.releaseDate?:""};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()};LazyColumn{items(fa,key={it.id}){a->val art=a.artwork?:a.tracks.firstOrNull()?.artwork;ListItem(headlineContent={Text(a.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(a.artist+" • "+a.tracks.size+" faixas")},leadingContent={if(!art.isNullOrBlank())AsyncImage(art,null,Modifier.size(64.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},trailingContent={Icon(Icons.Default.ChevronRight,null)},modifier=Modifier.clickable{open(a)})}}}}
+  when(mode){"Músicas"->LazyColumn{items(ft,key={it.id}){t->val a=allAlbums.firstOrNull{x->x.title==t.album&&x.artist==t.artist};TrackRow(t,user.favorites().contains(t.id),{if(a!=null)play(t,a)}){user.toggleFavorite(t.id)}}};"Artistas"->LazyVerticalGrid(columns=GridCells.Fixed(2),contentPadding=PaddingValues(10.dp)){gridItems(artists.filter{query.isBlank()||it.name.contains(query,true)},key={it.id}){a->val logo=a.albums.firstOrNull()?.artwork;Column(Modifier.padding(6.dp).clickable{artistFilter=a.name;mode="Músicas"}){Card(Modifier.fillMaxWidth().aspectRatio(1f)){if(!logo.isNullOrBlank())AsyncImage(logo,a.name,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(60.dp))}};Text(a.name,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=6.dp));Text(a.albums.sumOf{it.tracks.size}.toString()+" faixas",style=MaterialTheme.typography.bodySmall)}}};else->{val fa=allAlbums.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||it.title.contains(query,true)}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Data"->compareBy<Album>{it.releaseDate?:""};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()};LazyColumn{items(fa,key={it.id}){a->val art=a.artwork?:a.tracks.firstOrNull()?.artwork;ListItem(headlineContent={Text(a.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(a.artist+" • "+a.tracks.size+" faixas")},leadingContent={if(!art.isNullOrBlank())AsyncImage(art,null,Modifier.size(64.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},trailingContent={Icon(Icons.Default.ChevronRight,null)},modifier=Modifier.clickable{open(a)})}}}}
  }
 }
 @Composable
