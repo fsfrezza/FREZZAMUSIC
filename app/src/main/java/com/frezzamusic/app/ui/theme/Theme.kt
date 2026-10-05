@@ -5,6 +5,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import com.frezzamusic.app.BuildConfig
 
 private val FrezzaDarkColors = darkColorScheme(
@@ -41,9 +44,20 @@ fun FrezzaTheme(content: @Composable () -> Unit) {
         "THEFREZZA" -> TheFrezzaDarkColors
         else -> FrezzaDarkColors
     }
+    val geometricTypography = Typography(
+        headlineMedium = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.Bold),
+        headlineSmall = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.Bold),
+        titleLarge = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.SemiBold),
+        titleMedium = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.SemiBold),
+        bodyLarge = TextStyle(fontFamily=FontFamily.SansSerif),
+        bodyMedium = TextStyle(fontFamily=FontFamily.SansSerif),
+        bodySmall = TextStyle(fontFamily=FontFamily.SansSerif),
+        labelLarge = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.SemiBold),
+        labelMedium = TextStyle(fontFamily=FontFamily.SansSerif,fontWeight=FontWeight.Medium)
+    )
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography(),
+        typography = geometricTypography,
         content = content
     )
 }
