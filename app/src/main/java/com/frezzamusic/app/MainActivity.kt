@@ -12,6 +12,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil3.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -142,7 +148,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user)
+                AppTab.LIBRARY -> LibraryScreen(allTracks, query, { query = it }, { playback.play(it, allTracks) }, user)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
@@ -221,8 +227,9 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
                 "Artistas" -> items(filtered.groupBy { it.artist }.toList(), key = { it.first }) { (name, list) ->
                     ListItem(headlineContent = { Text(name) }, supportingContent = { Text("${list.size} faixas") }, leadingContent = { Icon(Icons.Default.Person, null) })
                 }
-                "Álbuns" -> items(filtered.groupBy { it.album }.toList(), key = { it.first }) { (name, list) ->
-                    ListItem(headlineContent = { Text(name) }, supportingContent = { Text("${list.first().artist} • ${list.size} faixas") }, leadingContent = { Icon(Icons.Default.Album, null) })
+                "Álbuns" -> items(filtered.groupBy { it.artist + " / " + it.album }.toList(), key = { it.first }) { (_, list) ->
+                    val first = list.first()
+                    ListItem(headlineContent = { Text(first.album, maxLines = 1, overflow = TextOverflow.Ellipsis) }, supportingContent = { Text(first.artist + " • " + (if (first.remote) "Online" else "Local") + " • " + list.size + " faixas", maxLines = 1, overflow = TextOverflow.Ellipsis) }, leadingContent = { if (!first.artwork.isNullOrBlank()) AsyncImage(model=first.artwork,contentDescription=null,modifier=Modifier.size(56.dp),contentScale=ContentScale.Crop) else Icon(Icons.Default.Album, null) }, modifier=Modifier.clickable { play(first) })
                 }
                 "Gêneros" -> items(filtered.groupBy { it.genre ?: "Sem gênero" }.toList(), key = { it.first }) { (name, list) ->
                     ListItem(headlineContent = { Text(name) }, supportingContent = { Text("${list.size} faixas") })
@@ -389,9 +396,9 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
 @Composable
 private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFavorite: () -> Unit) {
     ListItem(
-        headlineContent = { Text(track.title) },
-        supportingContent = { Text("${track.artist} • ${track.album}") },
-        leadingContent = { Icon(if (track.remote) Icons.Default.Cloud else Icons.Default.MusicNote, null) },
+        headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text("${track.artist} • ${track.album} • ${if (track.remote) "Online" else "Local"}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingContent = { if (!track.artwork.isNullOrBlank()) AsyncImage(model=track.artwork,contentDescription=null,modifier=Modifier.size(48.dp),contentScale=ContentScale.Crop) else Icon(if (track.remote) Icons.Default.Cloud else Icons.Default.MusicNote, null) },
         trailingContent = { IconButton(onClick = toggleFavorite) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null) } },
         modifier = Modifier.clickable(onClick = play)
     )
@@ -401,7 +408,7 @@ private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFa
 private fun MiniPlayer(track: Track?, playing: Boolean, toggle: () -> Unit, expand: () -> Unit) {
     Surface(tonalElevation = 6.dp, modifier = Modifier.clickable(onClick = expand)) {
         Row(modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Album, null, tint = MaterialTheme.colorScheme.primary)
+            if (!track?.artwork.isNullOrBlank()) AsyncImage(model=track?.artwork,contentDescription=null,modifier=Modifier.size(44.dp),contentScale=ContentScale.Crop) else Icon(Icons.Default.Album, null, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(track?.title ?: "Nada tocando", maxLines = 1, fontWeight = FontWeight.SemiBold)
