@@ -38,6 +38,8 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var folders: FolderMusicRepository
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private var mediaPermissionResult: ((Boolean) -> Unit)? = null
+    private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { mediaPermissionResult?.invoke(it) }
     private var folderAdded: (() -> Unit)? = null
     private var artistImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { try { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_:Exception){}; artistImagePicked?.invoke(it) } }
@@ -61,7 +63,8 @@ class MainActivity : ComponentActivity() {
                 FrezzaMusicApp(
                     repo = folders,
                     pickFolder = { callback -> folderAdded = callback; picker.launch(null) },
-                    pickArtistImage = { callback -> artistImagePicked = callback; imagePicker.launch(arrayOf("image/*")) }
+                    pickArtistImage = { callback -> artistImagePicked = callback; imagePicker.launch(arrayOf("image/*")) },
+                    requestMediaAccess = { callback -> mediaPermissionResult=callback; mediaPermission.launch(if(Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) }
                 )
             }
         }
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val playback = remember { PlaybackController(context, DevelopmentDriveStreamResolver(), user) }
@@ -85,6 +88,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var playerExpanded by remember { mutableStateOf(false) }
+    val onboardingPrefs=remember{context.getSharedPreferences("onboarding",android.content.Context.MODE_PRIVATE)}
+    var showMediaPrompt by remember{mutableStateOf(!onboardingPrefs.getBoolean("media_prompt_done",false))}
+    var deviceScan by remember{mutableStateOf(onboardingPrefs.getBoolean("scan_device",false))}
 
     DisposableEffect(Unit) {
         playback.onChanged = { changeCounter++ }
@@ -95,7 +101,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     suspend fun refreshLibrary() {
         loading = true
         roots = repo.folders()
-        localTracks = withContext(Dispatchers.IO) { repo.scan() }
+        localTracks = withContext(Dispatchers.IO) { (repo.scan() + if(deviceScan) repo.scanDevice() else emptyList()).distinctBy{it.uri} }
         artists = FrezzaDriveCatalog().artists().let { catalog ->
             when (BuildConfig.ARTIST_FILTER) {
                 "" -> catalog
@@ -160,6 +166,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            if(showMediaPrompt) AlertDialog(onDismissRequest={},title={Text("Buscar mídias no celular?")},text={Text("Deseja que o FREZZAMUSIC procure as músicas presentes no celular e as adicione à biblioteca? Se preferir, você poderá continuar adicionando pastas manualmente em Mais.")},confirmButton={Button(onClick={requestMediaAccess{granted->onboardingPrefs.edit().putBoolean("media_prompt_done",true).putBoolean("scan_device",granted).apply();deviceScan=granted;showMediaPrompt=false;if(granted)changeCounter++}}){Text("Buscar mídias")}},dismissButton={OutlinedButton(onClick={onboardingPrefs.edit().putBoolean("media_prompt_done",true).putBoolean("scan_device",false).apply();showMediaPrompt=false}){Text("Agora não")}})
         }
     }
 }
