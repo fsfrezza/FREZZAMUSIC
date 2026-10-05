@@ -176,7 +176,12 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
     val favorites = user.favorites()
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text(if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") "FREZZAMUSIC" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(painterResource(com.frezzamusic.app.R.drawable.frezzamusic_logo), contentDescription="FREZZAMUSIC", tint=Color.Unspecified, modifier=Modifier.size(180.dp))
+                    Text("FREZZAMUSIC", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Black)
+                }
+            } else Text(BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas")
         }
         item {
