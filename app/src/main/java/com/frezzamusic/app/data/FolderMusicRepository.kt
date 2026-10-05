@@ -3,6 +3,7 @@ package com.frezzamusic.app.data
 import android.content.Context
 import android.net.Uri
 import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import com.frezzamusic.app.model.Track
 
@@ -12,6 +13,14 @@ class FolderMusicRepository(private val context: Context) {
     fun add(uri: Uri) { val s=prefs.getStringSet("uris", emptySet())!!.toMutableSet(); s+=uri.toString(); prefs.edit().putStringSet("uris",s).apply() }
     fun remove(uri: Uri) { val s=prefs.getStringSet("uris", emptySet())!!.toMutableSet(); s-=uri.toString(); prefs.edit().putStringSet("uris",s).apply() }
     fun scan(): List<Track> = folders().flatMap { scanTree(DocumentFile.fromTreeUri(context,it)) }.distinctBy { it.uri }
+    fun scanDevice(): List<Track> {
+        val out= mutableListOf<Track>(); val collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection=arrayOf(MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_MODIFIED)
+        context.contentResolver.query(collection,projection,MediaStore.Audio.Media.IS_MUSIC+" != 0",null,MediaStore.Audio.Media.TITLE+" ASC")?.use { cur ->
+            val idI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media._ID); val titleI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE); val artistI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST); val albumI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM); val durI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION); val dateI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            while(cur.moveToNext()){ val id=cur.getLong(idI); val uri=Uri.withAppendedPath(collection,id.toString()); out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000)) }
+        }; return out
+    }
     private fun scanTree(root: DocumentFile?): List<Track> {
         if(root==null || !root.exists()) return emptyList()
         val out= mutableListOf<Track>()
