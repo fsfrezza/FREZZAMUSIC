@@ -297,7 +297,13 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
 private fun NewsScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val identity = remember { ProjectIdentities.forMode(BuildConfig.PROJECT_MODE) }
-    val news = remember { ReleaseRepository().announcements(BuildConfig.PROJECT_MODE) }
+    val repository = remember { ReleaseRepository() }
+    var news by remember { mutableStateOf(repository.announcements(BuildConfig.PROJECT_MODE)) }
+    var refreshing by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        news = repository.liveAnnouncements(BuildConfig.PROJECT_MODE)
+        refreshing = false
+    }
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text(identity.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
@@ -308,7 +314,7 @@ private fun NewsScreen() {
                     Icon(Icons.Default.Article, null); Spacer(Modifier.width(8.dp)); Text("Conteúdo editorial")
                 }
             }
-            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
+            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))\n            if(refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
         }
         items(news, key = { it.id }) { item ->
             ElevatedCard(Modifier.fillMaxWidth()) {
