@@ -103,7 +103,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     suspend fun refreshLibrary() {
         loading = true
         roots = repo.folders()
-        localTracks = withContext(Dispatchers.IO) { (repo.scan() + if(deviceScan) repo.scanDevice() else emptyList()).distinctBy{it.uri} }
+        localTracks = withContext(Dispatchers.IO) { val manual=repo.scan(); val device=if(deviceScan) repo.scanDevice() else emptyList(); repo.mergeWithoutDuplicates(manual,device) }
         artists = FrezzaDriveCatalog().artists().let { catalog ->
             when (BuildConfig.ARTIST_FILTER) {
                 "" -> catalog
@@ -115,7 +115,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
 
     LaunchedEffect(Unit) { refreshLibrary() }
     LaunchedEffect(changeCounter) {
-        if (changeCounter > 0 && roots != repo.folders()) refreshLibrary()
+        if (changeCounter > 0) refreshLibrary()
     }
 
     val remoteTracks = artists.flatMap { it.albums }.flatMap { it.tracks }
@@ -160,7 +160,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ })
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true })
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
@@ -379,12 +379,15 @@ private fun NewsScreen() {
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item {
             Text("Configurações", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Pastas da biblioteca", fontWeight = FontWeight.Bold)
-            Button(onClick = add) { Text("Adicionar pasta") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = add) { Text("Adicionar pasta") }
+                OutlinedButton(onClick = refresh) { Icon(Icons.Default.Refresh, null); Text(" Atualizar biblioteca") }
+            }
         }
         items(folders, key = { it.toString() }) { uri ->
             ListItem(
