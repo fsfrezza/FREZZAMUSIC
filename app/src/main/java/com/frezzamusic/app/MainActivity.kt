@@ -163,7 +163,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user, downloads)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true })
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads)
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
@@ -388,7 +388,13 @@ private fun NewsScreen() {
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository) {
+    var downloadRevision by remember { mutableIntStateOf(0) }
+    val downloadedCount = remember(downloadRevision) { downloads.downloadedTrackIds().size }
+    val downloadedBytes = remember(downloadRevision) { downloads.totalBytes() }
+    var confirmClear by remember { mutableStateOf(false) }
+    val storageLabel = remember(downloadedBytes) { if (downloadedBytes < 1024L * 1024L) "${downloadedBytes / 1024L} KB" else String.format(java.util.Locale.getDefault(), "%.1f MB", downloadedBytes / (1024.0 * 1024.0)) }
+
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item {
             Text("Configurações", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -410,9 +416,17 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             HorizontalDivider()
             ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Estrutura preparada para letras embutidas/arquivos sincronizados") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
             ListItem(headlineContent = { Text("Áudio") }, supportingContent = { Text("Media3 • gapless quando suportado • velocidade e crossfade preparados para evolução") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
-            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Download, null) })
+            ListItem(headlineContent = { Text("Downloads offline") }, supportingContent = { Text("$downloadedCount faixas • $storageLabel usados") }, leadingContent = { Icon(Icons.Default.Download, null) }, trailingContent = { if (downloadedCount > 0) TextButton(onClick = { confirmClear = true }) { Text("Limpar") } })
+            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
         }
     }
+    if (confirmClear) AlertDialog(
+        onDismissRequest = { confirmClear = false },
+        title = { Text("Limpar downloads?") },
+        text = { Text("Os $downloadedCount arquivos baixados serão removidos deste aparelho. As músicas continuarão disponíveis por streaming.") },
+        confirmButton = { Button(onClick = { downloads.clearAll(); downloadRevision++; confirmClear = false }) { Text("Limpar") } },
+        dismissButton = { OutlinedButton(onClick = { confirmClear = false }) { Text("Cancelar") } }
+    )
 }
 
 @Composable
