@@ -35,14 +35,14 @@ class FolderMusicRepository(private val context: Context) {
                 val artwork=albumId.takeIf{it>0}?.let{"content://media/external/audio/albumart/$it"}
                 val trackNo=cur.getInt(trackI).takeIf{it>0}?.let{it % 1000}
                 val genre=if(genreI>=0) cur.getString(genreI)?.takeIf{it.isNotBlank()} else null
-                out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),artwork=artwork,trackNumber=trackNo,durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000),genre=genre)
+                out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),artwork=artwork,trackNumber=trackNo,durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000),genre=genre,folder=folderLabel)
             }
         }; return out
     }
     private fun scanTree(root: DocumentFile?): List<Track> {
         if(root==null || !root.exists()) return emptyList()
         val out= mutableListOf<Track>()
-        fun walk(f:DocumentFile){ if(f.isDirectory) f.listFiles().forEach(::walk) else if(f.isFile && isAudio(f)){ val name=f.name?.substringBeforeLast('.')?:"Faixa"; val m=metadata(f.uri,name,f.lastModified()); out += m } }
+        fun walk(f:DocumentFile){ if(f.isDirectory) f.listFiles().forEach(::walk) else if(f.isFile && isAudio(f)){ val name=f.name?.substringBeforeLast('.')?:"Faixa"; val m=metadata(f.uri,name,f.lastModified()); out += m.copy(folder=f.parentFile?.name ?: root.name) } }
         walk(root); return out
     }
     private fun metadata(uri:Uri,fallback:String,dateMs:Long):Track {
