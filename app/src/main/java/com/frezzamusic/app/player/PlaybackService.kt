@@ -85,12 +85,26 @@ class PlaybackService:MediaSessionService(){
     },Visualizer.getMaxCaptureRate()/2,true,true)
     v.enabled=visualizerEnabled;visualizerAvailable=true
    }
-  }.onFailure{visualizerAvailable=false;spectrum=emptyList()}
+  }.onFailure{
+   runCatching{visualizer?.release()}
+   visualizer=null
+   visualizerSessionId=0
+   visualizerAvailable=false
+   spectrum=emptyList()
+   waveform=emptyList()
+  }
  }
  private fun updateVisualizerState(){
   runCatching{
    visualizer?.let { v -> if(v.enabled!=visualizerEnabled)v.enabled=visualizerEnabled }
-  }.onFailure{visualizerAvailable=false;spectrum=emptyList();waveform=emptyList()}
+  }.onFailure{
+   runCatching{visualizer?.release()}
+   visualizer=null
+   visualizerSessionId=0
+   visualizerAvailable=false
+   spectrum=emptyList()
+   waveform=emptyList()
+  }
   if(!visualizerEnabled){spectrum=emptyList();waveform=emptyList()}
  }
  private fun applyPreset(index:Int):Boolean{
