@@ -1,6 +1,7 @@
 package com.frezzamusic.app.player
 import android.media.audiofx.Equalizer
 import android.media.audiofx.Visualizer
+import android.content.Context
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.*
@@ -19,13 +20,20 @@ class PlaybackService:MediaSessionService(){
   @Volatile var waveform:List<Int> = emptyList(); private set
   @Volatile var visualizerAvailable:Boolean=false; private set
   @Volatile var visualizerEnabled:Boolean=true; private set
+  private const val VISUALIZER_PREFS="playback_visualizer"
+  private const val VISUALIZER_ENABLED="enabled"
   private var instance:PlaybackService?=null
   fun setEqualizerPreset(index:Int):Boolean = instance?.applyPreset(index) ?: false
   fun disableEqualizer(){instance?.eq?.enabled=false;currentPreset=-1}
-  fun setVisualizerEnabled(enabled:Boolean){visualizerEnabled=enabled;instance?.updateVisualizerState()}
+  fun setVisualizerEnabled(enabled:Boolean){
+   visualizerEnabled=enabled
+   instance?.getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE)?.edit()?.putBoolean(VISUALIZER_ENABLED,enabled)?.apply()
+   instance?.updateVisualizerState()
+  }
  }
  override fun onCreate(){
   super.onCreate();instance=this
+  visualizerEnabled=getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE).getBoolean(VISUALIZER_ENABLED,true)
   val p=ExoPlayer.Builder(this).build()
   p.addListener(object:Player.Listener{
    override fun onPlaybackStateChanged(state:Int){if(state==Player.STATE_READY){attachEqualizer(p.audioSessionId);attachVisualizer(p.audioSessionId)}}
@@ -66,7 +74,9 @@ class PlaybackService:MediaSessionService(){
   }.onFailure{visualizerAvailable=false;spectrum=emptyList()}
  }
  private fun updateVisualizerState(){
-  runCatching{visualizer?.enabled=visualizerEnabled}.onFailure{visualizerAvailable=false;spectrum=emptyList()}
+  runCatching{
+   visualizer?.let { v -> if(v.enabled!=visualizerEnabled)v.enabled=visualizerEnabled }
+  }.onFailure{visualizerAvailable=false;spectrum=emptyList();waveform=emptyList()}
   if(!visualizerEnabled){spectrum=emptyList();waveform=emptyList()}
  }
  private fun applyPreset(index:Int):Boolean{
