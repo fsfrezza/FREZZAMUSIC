@@ -11,8 +11,32 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.10.2"
+        versionCode = 20
+        versionName = "0.20.0"
+    }
+    flavorDimensions += "project"
+    productFlavors {
+        create("frezzamusic") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.app"
+            resValue("string", "app_name", "FREZZAMUSIC")
+            buildConfigField("String", "PROJECT_MODE", "\"FREZZAMUSIC\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"\"")
+        }
+        create("solasias") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.solasias"
+            resValue("string", "app_name", "Solasias")
+            buildConfigField("String", "PROJECT_MODE", "\"SOLASIAS\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"Solasias\"")
+        }
+        create("thefrezza") {
+            dimension = "project"
+            applicationId = "com.frezzamusic.thefrezza"
+            resValue("string", "app_name", "theFrezza")
+            buildConfigField("String", "PROJECT_MODE", "\"THEFREZZA\"")
+            buildConfigField("String", "ARTIST_FILTER", "\"theFrezza\"")
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -31,6 +55,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("io.coil-kt.coil3:coil-compose:3.2.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
