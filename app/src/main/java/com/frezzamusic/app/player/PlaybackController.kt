@@ -35,6 +35,9 @@ class PlaybackController(
         future = MediaController.Builder(context, token).buildAsync().also { f ->
             f.addListener({
                 controller = f.get().also { c ->
+                    c.shuffleModeEnabled = settings.shuffle
+                    c.repeatMode = settings.repeatMode
+                    c.setPlaybackSpeed(settings.speed)
                     c.addListener(object : Player.Listener {
                         override fun onEvents(player: Player, events: Player.Events) {
                             val id = player.currentMediaItem?.mediaId
@@ -101,7 +104,7 @@ class PlaybackController(
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
     fun seek(ms: Long) { controller?.seekTo(ms) }
-    fun shuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }; onChanged?.invoke() }
+    fun shuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled; settings.shuffle = it.shuffleModeEnabled }; onChanged?.invoke() }
     fun repeat() {
         controller?.let {
             it.repeatMode = when (it.repeatMode) {
@@ -110,9 +113,10 @@ class PlaybackController(
                 else -> Player.REPEAT_MODE_OFF
             }
         }
+        controller?.let { settings.repeatMode = it.repeatMode }
         onChanged?.invoke()
     }
-    fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed.coerceIn(.5f, 2f)); onChanged?.invoke() }
+    fun setSpeed(speed: Float) { val value=speed.coerceIn(.5f,2f); settings.speed=value; controller?.setPlaybackSpeed(value); onChanged?.invoke() }
     fun sleepTimer(minutes: Int) {
         scope.launch {
             delay(minutes.coerceAtLeast(1) * 60_000L)
