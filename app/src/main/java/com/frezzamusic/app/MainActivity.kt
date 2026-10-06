@@ -259,7 +259,13 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
         "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)}){user.toggleFavorite(t.id)}}
         "Artistas"->items(tracks.filter{query.isBlank()||it.artist.contains(query,true)}.groupBy{it.artist}.toList(),key={it.first}){(n,l)->val custom=user.artistImage(n);ElevatedCard(Modifier.padding(8.dp).fillMaxWidth().clickable{artistFilter=n;mode="Músicas"}){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){Card(Modifier.size(92.dp)){if(custom!=null)AsyncImage(custom,n,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(50.dp))}};Column(Modifier.weight(1f).padding(start=12.dp)){Text(n,fontWeight=FontWeight.Bold);Text("${l.size} faixas");TextButton(onClick={pickArtistImage{uri->user.setArtistImage(n,uri.toString())}}){Icon(Icons.Default.Image,null);Text(" Escolher logo")};if(custom!=null)TextButton(onClick={user.clearArtistImage(n)}){Text("Remover imagem")}}}}}
         "Álbuns"->items(filtered.groupBy{it.artist+" / "+it.album}.values.toList().let{groups->when(sort){"Artista"->groups.sortedBy{it.first().artist.lowercase()};"Data"->groups.sortedBy{it.maxOfOrNull{x->x.dateMs?:0L}?:0L};else->groups.sortedBy{it.first().album.lowercase()}}.let{if(ascending)it else it.reversed()}},key={it.first().artist+"/"+it.first().album}){l->val f=l.first();ListItem(headlineContent={Text(f.album,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(f.artist+" • "+l.size+" faixas")},leadingContent={if(!f.artwork.isNullOrBlank())AsyncImage(f.artwork,null,Modifier.size(56.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},modifier=Modifier.clickable{play(f)})}
-        else->item{Text("As pastas autorizadas são administradas em Mais → Pastas.",Modifier.padding(20.dp))}
+        else->{
+          val folders=tracks.filter{query.isBlank()||it.folder.orEmpty().contains(query,true)||it.title.contains(query,true)}.groupBy{it.folder?.takeIf{s->s.isNotBlank()}?:"Sem pasta identificada"}.toSortedMap(String.CASE_INSENSITIVE_ORDER)
+          folders.forEach{(folder,folderTracks)->
+            item(key="folder-header-"+folder){ListItem(headlineContent={Text(folder,fontWeight=FontWeight.Bold)},supportingContent={Text("${folderTracks.size} faixas")},leadingContent={Icon(Icons.Default.Folder,null)})}
+            items(folderTracks,key={"folder-"+folder+"-"+it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)}){user.toggleFavorite(t.id)}}
+          }
+        }
       }}
     }
 }
