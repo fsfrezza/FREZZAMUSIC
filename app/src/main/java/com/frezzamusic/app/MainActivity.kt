@@ -260,11 +260,19 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
                 )
             }
         }
-        item {
-            OutlinedButton(onClick = online, modifier=Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Cloud, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Abrir FREZZAMUSIC Online")
+        if (remote.isEmpty()) {
+            item {
+                ElevatedCard(Modifier.fillMaxWidth().clickable(onClick=online)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cloud, contentDescription=null, tint=MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Catálogo online", fontWeight=FontWeight.Bold)
+                            Text("Abra as músicas disponíveis online.", style=MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription=null)
+                    }
+                }
             }
         }
     }
