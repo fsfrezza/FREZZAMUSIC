@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "id": "app-v020",
+      "artist": "FREZZAMUSIC",
+      "title": "FREZZAMUSIC v0.20",
+      "releaseDate": "2026-10-05",
+      "status": "RELEASED",
+      "type": "APP_NEWS",
+      "message": "Primeira versão estável da nova geração do FREZZAMUSIC.",
+      "artwork": null,
+      "albumId": null,
+      "externalUrl": null,
+      "projects": ["FREZZAMUSIC", "SOLASIAS", "THEFREZZA"]
+    }
+  ]
+}
