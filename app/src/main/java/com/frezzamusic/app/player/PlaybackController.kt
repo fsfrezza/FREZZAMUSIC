@@ -27,6 +27,7 @@ class PlaybackController(
     private val settings = SettingsRepository(context)
     var onChanged: (() -> Unit)? = null
     private var lastRecorded: String? = null
+    private var checkpointJob: Job? = null
 
     fun connect() {
         if (future != null) return
@@ -49,12 +50,27 @@ class PlaybackController(
                         }
                     })
                 }
+                startPositionCheckpoints()
                 onChanged?.invoke()
             }, ContextCompat.getMainExecutor(context))
         }
     }
 
+    private fun startPositionCheckpoints() {
+        checkpointJob?.cancel()
+        checkpointJob = scope.launch {
+            while (isActive) {
+                delay(5_000L)
+                controller?.let { c ->
+                    c.currentMediaItem?.mediaId?.let { settings.lastTrackId = it }
+                    if (c.currentMediaItem != null) settings.lastPositionMs = c.currentPosition.coerceAtLeast(0L)
+                }
+            }
+        }
+    }
+
     fun release() {
+        checkpointJob?.cancel()
         controller?.let { c ->
             c.currentMediaItem?.mediaId?.let { settings.lastTrackId = it }
             settings.lastPositionMs = c.currentPosition.coerceAtLeast(0L)
