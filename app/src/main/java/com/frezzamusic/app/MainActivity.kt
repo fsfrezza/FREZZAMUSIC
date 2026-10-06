@@ -44,7 +44,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var folders: FolderMusicRepository
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var mediaPermissionResult: ((Boolean) -> Unit)? = null
+    private var visualizerPermissionResult: ((Boolean) -> Unit)? = null
     private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { mediaPermissionResult?.invoke(it) }
+    private val visualizerPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { visualizerPermissionResult?.invoke(it) }
     private var folderAdded: (() -> Unit)? = null
     private var artistImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { try { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_:Exception){}; artistImagePicked?.invoke(it) } }
@@ -69,7 +71,8 @@ class MainActivity : ComponentActivity() {
                     repo = folders,
                     pickFolder = { callback -> folderAdded = callback; picker.launch(null) },
                     pickArtistImage = { callback -> artistImagePicked = callback; imagePicker.launch(arrayOf("image/*")) },
-                    requestMediaAccess = { callback -> mediaPermissionResult=callback; mediaPermission.launch(if(Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) }
+                    requestMediaAccess = { callback -> mediaPermissionResult=callback; mediaPermission.launch(if(Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) },
+                    requestVisualizerAccess = { callback -> visualizerPermissionResult=callback; visualizerPermission.launch(Manifest.permission.RECORD_AUDIO) }
                 )
             }
         }
@@ -79,7 +82,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
@@ -170,7 +173,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
-                    FullPlayer(currentTrack, playback, user, onClose = { playerExpanded = false })
+                    FullPlayer(currentTrack, playback, user, requestVisualizerAccess = requestVisualizerAccess, onClose = { playerExpanded = false })
                 }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
