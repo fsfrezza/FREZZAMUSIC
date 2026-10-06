@@ -39,7 +39,18 @@ class PlaybackService:MediaSessionService(){
   visualizerEnabled=getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE).getBoolean(VISUALIZER_ENABLED,true)
   val p=ExoPlayer.Builder(this).build()
   p.addListener(object:Player.Listener{
-   override fun onPlaybackStateChanged(state:Int){if(state==Player.STATE_READY){attachEqualizer(p.audioSessionId);attachVisualizer(p.audioSessionId)}}
+   override fun onAudioSessionIdChanged(id:Int){
+    audioSessionId=id
+    attachEqualizer(id)
+    attachVisualizer(id)
+   }
+   override fun onPlaybackStateChanged(state:Int){
+    if(state==Player.STATE_READY){
+     audioSessionId=p.audioSessionId
+     attachEqualizer(p.audioSessionId)
+     attachVisualizer(p.audioSessionId)
+    }
+   }
   })
   session=MediaSession.Builder(this,p).build()
  }
@@ -59,9 +70,9 @@ class PlaybackService:MediaSessionService(){
   runCatching{
    visualizer?.release();visualizerSessionId=id
    visualizer=Visualizer(id).also{v->
-    v.captureSize=Visualizer.getCaptureSizeRange()[0]
+    v.captureSize=Visualizer.getCaptureSizeRange()[1]
     v.setDataCaptureListener(object:Visualizer.OnDataCaptureListener{
-     override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){if(data!=null){val step=(data.size/48).coerceAtLeast(1);waveform=(0 until 48).map{i->data[(i*step).coerceAtMost(data.lastIndex)].toInt()}}}
+     override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){if(data!=null){val step=(data.size/48).coerceAtLeast(1);waveform=(0 until 48).map{i->(data[(i*step).coerceAtMost(data.lastIndex)].toInt() and 0xFF)-128}}}
      override fun onFftDataCapture(vis:Visualizer?,fft:ByteArray?,rate:Int){
       if(fft==null)return
       val bins=24;val step=(fft.size/2/bins).coerceAtLeast(1)
