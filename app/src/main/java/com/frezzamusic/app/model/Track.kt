@@ -17,6 +17,7 @@ data class Track(
     val dateMs: Long? = null,
     val remoteFileId: String? = null,
     val genre: String? = null,
+    val folder: String? = null,
     val quality: AudioQuality = AudioQuality.UNKNOWN,
     val canStream: Boolean = true,
     val canDownload: Boolean = source == TrackSource.LOCAL,
