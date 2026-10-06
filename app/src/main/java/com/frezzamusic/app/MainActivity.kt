@@ -83,6 +83,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
+    val settings = remember { SettingsRepository(context) }
 
     var changeCounter by remember { mutableIntStateOf(0) }
     var tab by remember { mutableStateOf(AppTab.HOME) }
@@ -163,7 +164,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user, downloads)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
                 AppTab.NEWS -> NewsScreen()
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads)
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback)
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
@@ -388,7 +389,9 @@ private fun NewsScreen() {
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController) {
+    var speed by remember { mutableFloatStateOf(settings.speed) }
+    var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
     val downloadedCount = remember(downloadRevision) { downloads.downloadedTrackIds().size }
     val downloadedBytes = remember(downloadRevision) { downloads.totalBytes() }
@@ -415,7 +418,10 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
         item {
             HorizontalDivider()
             ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Estrutura preparada para letras embutidas/arquivos sincronizados") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
-            ListItem(headlineContent = { Text("Áudio") }, supportingContent = { Text("Media3 • gapless quando suportado • velocidade e crossfade preparados para evolução") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
+            ListItem(headlineContent = { Text("Velocidade padrão") }, supportingContent = { Text(speed.toString() + "x") }, leadingContent = { Icon(Icons.Default.Speed, null) })
+            Slider(value=speed,onValueChange={speed=it},onValueChangeFinished={settings.speed=speed;playback.setSpeed(speed)},valueRange=0.5f..2f,steps=5,modifier=Modifier.padding(horizontal=16.dp))
+            ListItem(headlineContent = { Text("Crossfade") }, supportingContent = { Text(if(crossfade==0)"Desativado" else crossfade.toString() + " s") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
+            Slider(value=crossfade.toFloat(),onValueChange={crossfade=it.toInt()},onValueChangeFinished={settings.crossfadeSeconds=crossfade},valueRange=0f..12f,steps=11,modifier=Modifier.padding(horizontal=16.dp))
             ListItem(headlineContent = { Text("Downloads offline") }, supportingContent = { Text("$downloadedCount faixas • $storageLabel usados") }, leadingContent = { Icon(Icons.Default.Download, null) }, trailingContent = { if (downloadedCount > 0) TextButton(onClick = { confirmClear = true }) { Text("Limpar") } })
             ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
         }
