@@ -28,7 +28,10 @@ class PlaybackService:MediaSessionService(){
   fun setVisualizerEnabled(enabled:Boolean){
    visualizerEnabled=enabled
    instance?.getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE)?.edit()?.putBoolean(VISUALIZER_ENABLED,enabled)?.apply()
-   instance?.updateVisualizerState()
+   instance?.let { service ->
+    if(enabled && service.visualizer==null && audioSessionId>0) service.attachVisualizer(audioSessionId)
+    else service.updateVisualizerState()
+   }
   }
  }
  override fun onCreate(){
