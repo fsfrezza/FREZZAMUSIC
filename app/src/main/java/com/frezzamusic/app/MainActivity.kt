@@ -155,7 +155,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
-                AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }) { tab = AppTab.ONLINE }
+                AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks) }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)) }, playback.lastTrackId()) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks) }, user, pickArtistImage)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks) }, user)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
@@ -174,28 +174,70 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
 }
 
 @Composable
-private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibraryRepository, all: List<Track>, play: (Track) -> Unit, online: () -> Unit) {
+private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibraryRepository, all: List<Track>, play: (Track) -> Unit, resume: (Track) -> Unit, lastTrackId: String?, online: () -> Unit) {
     val favorites = user.favorites()
+    val recent = user.history().mapNotNull { h -> all.find { it.id == h.trackId } }.take(8)
+    val favoriteTracks = all.filter { it.id in favorites }.take(8)
+    val lastTrack = lastTrackId?.let { id -> all.find { it.id == id } }
+    val onlineAlbums = remote.groupBy { it.artist to it.album }.values.take(6)
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(painterResource(com.frezzamusic.app.R.drawable.frezzamusic_logo), contentDescription="FREZZAMUSIC", tint=Color.Unspecified, modifier=Modifier.size(180.dp))
+                    Icon(painterResource(com.frezzamusic.app.R.drawable.frezzamusic_logo), contentDescription="FREZZAMUSIC", tint=Color.Unspecified, modifier=Modifier.size(132.dp))
                     Text("FREZZAMUSIC", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Black)
                 }
             } else Text(BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas")
         }
+        if (lastTrack != null) {
+            item {
+                ElevatedCard(Modifier.fillMaxWidth().clickable { resume(lastTrack) }) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!lastTrack.artwork.isNullOrBlank()) AsyncImage(lastTrack.artwork, null, Modifier.size(64.dp), contentScale=ContentScale.Crop)
+                        else Icon(Icons.Default.PlayCircle, null, Modifier.size(64.dp))
+                        Column(Modifier.weight(1f).padding(horizontal=12.dp)) {
+                            Text("Continue ouvindo", color=MaterialTheme.colorScheme.primary, fontWeight=FontWeight.Bold)
+                            Text(lastTrack.title, fontWeight=FontWeight.Bold, maxLines=1, overflow=TextOverflow.Ellipsis)
+                            Text(lastTrack.artist, style=MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.PlayArrow, "Continuar")
+                    }
+                }
+            }
+        }
+        if (recent.isNotEmpty()) {
+            item { Text("Tocadas recentemente", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold) }
+            items(recent, key = { "recent-"+it.id }) { track -> TrackRow(track, favorites.contains(track.id), { play(track) }) { user.toggleFavorite(track.id) } }
+        }
+        if (favoriteTracks.isNotEmpty()) {
+            item { Text("Favoritas", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold, modifier=Modifier.padding(top=6.dp)) }
+            items(favoriteTracks, key = { "fav-"+it.id }) { track -> TrackRow(track, true, { play(track) }) { user.toggleFavorite(track.id) } }
+        }
+        if (onlineAlbums.isNotEmpty()) {
+            item {
+                Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
+                    Text("Do catálogo online", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold, modifier=Modifier.weight(1f))
+                    TextButton(onClick=online){ Text("Ver tudo") }
+                }
+            }
+            items(onlineAlbums, key={ "online-"+it.first().artist+"-"+it.first().album }) { tracks ->
+                val first=tracks.first()
+                ListItem(
+                    headlineContent={Text(first.album, maxLines=1, overflow=TextOverflow.Ellipsis)},
+                    supportingContent={Text(first.artist+" • "+tracks.size+" faixas")},
+                    leadingContent={if(!first.artwork.isNullOrBlank()) AsyncImage(first.artwork,null,Modifier.size(56.dp),contentScale=ContentScale.Crop) else Icon(Icons.Default.Album,null)},
+                    trailingContent={Icon(Icons.Default.PlayArrow,null)},
+                    modifier=Modifier.clickable{play(first)}
+                )
+            }
+        }
         item {
-            Button(onClick = online) {
+            OutlinedButton(onClick = online, modifier=Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Cloud, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Abrir FREZZAMUSIC Online")
             }
-        }
-        item { Text("Recentes", fontWeight = FontWeight.Bold) }
-        items(user.history().mapNotNull { h -> all.find { it.id == h.trackId } }.take(12), key = { it.id }) { track ->
-            TrackRow(track, favorites.contains(track.id), { play(track) }) { user.toggleFavorite(track.id) }
         }
     }
 }
