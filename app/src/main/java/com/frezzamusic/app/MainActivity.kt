@@ -356,7 +356,8 @@ private fun NewsScreen() {
                     Icon(Icons.Default.Article, null); Spacer(Modifier.width(8.dp)); Text("Conteúdo editorial")
                 }
             }
-            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))\n            if(refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
+            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
+            if(refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
         }
         items(news, key = { it.id }) { item ->
             ElevatedCard(Modifier.fillMaxWidth()) {
