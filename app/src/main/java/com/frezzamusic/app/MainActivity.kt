@@ -401,7 +401,10 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item {
             Text("Configurações", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Pastas da biblioteca", fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Text("Biblioteca local", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Pastas usadas para localizar músicas armazenadas neste aparelho.", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = add) { Text("Adicionar pasta") }
                 OutlinedButton(onClick = refresh) { Icon(Icons.Default.Refresh, null); Text(" Atualizar biblioteca") }
@@ -416,12 +419,15 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             )
         }
         item {
-            HorizontalDivider()
-            ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Estrutura preparada para letras embutidas/arquivos sincronizados") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            Text("Reprodução", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ListItem(headlineContent = { Text("Letras e LRC") }, supportingContent = { Text("Compatível com letras embutidas e sincronizadas quando disponíveis.") }, leadingContent = { Icon(Icons.Default.Lyrics, null) })
             ListItem(headlineContent = { Text("Velocidade padrão") }, supportingContent = { Text(speed.toString() + "x") }, leadingContent = { Icon(Icons.Default.Speed, null) })
             Slider(value=speed,onValueChange={speed=it},onValueChangeFinished={settings.speed=speed;playback.setSpeed(speed)},valueRange=0.5f..2f,steps=5,modifier=Modifier.padding(horizontal=16.dp))
             ListItem(headlineContent = { Text("Crossfade") }, supportingContent = { Text(if(crossfade==0)"Desativado" else crossfade.toString() + " s") }, leadingContent = { Icon(Icons.Default.Equalizer, null) })
             Slider(value=crossfade.toFloat(),onValueChange={crossfade=it.toInt()},onValueChangeFinished={settings.crossfadeSeconds=crossfade},valueRange=0f..12f,steps=11,modifier=Modifier.padding(horizontal=16.dp))
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            Text("Offline e streaming", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             ListItem(headlineContent = { Text("Downloads offline") }, supportingContent = { Text("$downloadedCount faixas • $storageLabel usados") }, leadingContent = { Icon(Icons.Default.Download, null) }, trailingContent = { if (downloadedCount > 0) TextButton(onClick = { confirmClear = true }) { Text("Limpar") } })
             ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
         }
