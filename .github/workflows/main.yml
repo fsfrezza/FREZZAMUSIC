@@ -47,11 +47,29 @@ jobs:
           cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk dist/Solasias.apk
           cp app/build/outputs/apk/thefrezza/debug/app-thefrezza-debug.apk dist/theFrezza.apk
 
-      - name: Upload debug APKs
+      - name: Upload FREZZAMUSIC APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: FREZZAMUSIC-debug-apks
-          path: dist/*.apk
+          name: FREZZAMUSIC
+          path: dist/FREZZAMUSIC.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Solasias APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solasias
+          path: dist/Solasias.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload theFrezza APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theFrezza
+          path: dist/theFrezza.apk
           if-no-files-found: error
           retention-days: 14
