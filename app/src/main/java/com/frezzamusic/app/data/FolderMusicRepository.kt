@@ -13,6 +13,16 @@ class FolderMusicRepository(private val context: Context) {
     fun add(uri: Uri) { val s=prefs.getStringSet("uris", emptySet())!!.toMutableSet(); s+=uri.toString(); prefs.edit().putStringSet("uris",s).apply() }
     fun remove(uri: Uri) { val s=prefs.getStringSet("uris", emptySet())!!.toMutableSet(); s-=uri.toString(); prefs.edit().putStringSet("uris",s).apply() }
     fun scan(): List<Track> = folders().flatMap { scanTree(DocumentFile.fromTreeUri(context,it)) }.distinctBy { it.uri }
+
+    fun mergeWithoutDuplicates(folderTracks: List<Track>, deviceTracks: List<Track>): List<Track> {
+        val seen = HashSet<String>()
+        return (folderTracks + deviceTracks).filter { track ->
+            val durationBucket = track.durationMs?.div(1000L) ?: -1L
+            val key = listOf(track.title, track.artist, track.album)
+                .joinToString("|") { it.trim().lowercase() } + "|" + durationBucket
+            seen.add(key)
+        }
+    }
     fun scanDevice(): List<Track> {
         val out= mutableListOf<Track>(); val collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection=arrayOf(MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_MODIFIED)
