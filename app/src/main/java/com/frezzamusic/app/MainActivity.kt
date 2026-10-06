@@ -192,7 +192,7 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
                     Text("FREZZAMUSIC", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Black)
                 }
             } else Text(BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-            Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas")
+            Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas", style=MaterialTheme.typography.bodySmall, modifier=Modifier.fillMaxWidth(), textAlign=TextAlign.Center)
         }
         if (lastTrack != null) {
             item {
@@ -212,11 +212,33 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
         }
         if (recent.isNotEmpty()) {
             item { Text("Tocadas recentemente", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold) }
-            items(recent, key = { "recent-"+it.id }) { track -> TrackRow(track, favorites.contains(track.id), { play(track) }) { user.toggleFavorite(track.id) } }
+            item {
+                LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    items(recent, key = { "recent-"+it.id }) { track ->
+                        ElevatedCard(Modifier.width(150.dp).clickable { play(track) }) {
+                            if (!track.artwork.isNullOrBlank()) AsyncImage(track.artwork,null,Modifier.fillMaxWidth().aspectRatio(1f),contentScale=ContentScale.Crop)
+                            else Box(Modifier.fillMaxWidth().aspectRatio(1f),contentAlignment=Alignment.Center){Icon(Icons.Default.MusicNote,null,Modifier.size(54.dp))}
+                            Text(track.title,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(start=10.dp,end=10.dp,top=8.dp))
+                            Text(track.artist,style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(start=10.dp,end=10.dp,bottom=8.dp))
+                        }
+                    }
+                }
+            }
         }
         if (favoriteTracks.isNotEmpty()) {
             item { Text("Favoritas", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold, modifier=Modifier.padding(top=6.dp)) }
-            items(favoriteTracks, key = { "fav-"+it.id }) { track -> TrackRow(track, true, { play(track) }) { user.toggleFavorite(track.id) } }
+            item {
+                LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    items(favoriteTracks, key = { "fav-"+it.id }) { track ->
+                        ElevatedCard(Modifier.width(150.dp).clickable { play(track) }) {
+                            if (!track.artwork.isNullOrBlank()) AsyncImage(track.artwork,null,Modifier.fillMaxWidth().aspectRatio(1f),contentScale=ContentScale.Crop)
+                            else Box(Modifier.fillMaxWidth().aspectRatio(1f),contentAlignment=Alignment.Center){Icon(Icons.Default.Favorite,null,Modifier.size(54.dp))}
+                            Text(track.title,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(start=10.dp,end=10.dp,top=8.dp))
+                            Text(track.artist,style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(start=10.dp,end=10.dp,bottom=8.dp))
+                        }
+                    }
+                }
+            }
         }
         if (onlineAlbums.isNotEmpty()) {
             item {
