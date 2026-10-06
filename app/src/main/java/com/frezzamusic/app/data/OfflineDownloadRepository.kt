@@ -21,11 +21,44 @@ class OfflineDownloadRepository(
 
     fun state(track: Track): DownloadState {
         val path = prefs.getString("file:" + track.id, null) ?: return DownloadState.NOT_DOWNLOADED
-        return if (File(path).exists()) DownloadState.DOWNLOADED else DownloadState.NOT_DOWNLOADED
+        val file = File(path)
+        if (!file.exists() || file.length() <= 0L) {
+            prefs.edit().remove("file:" + track.id).apply()
+            return DownloadState.NOT_DOWNLOADED
+        }
+        return DownloadState.DOWNLOADED
     }
 
-    fun localUri(track: Track): String? =
-        prefs.getString("file:" + track.id, null)?.takeIf { File(it).exists() }?.let { File(it).toURI().toString() }
+    fun localUri(track: Track): String? {
+        val path = prefs.getString("file:" + track.id, null) ?: return null
+        val file = File(path)
+        if (!file.exists() || file.length() <= 0L) {
+            prefs.edit().remove("file:" + track.id).apply()
+            if (file.exists()) file.delete()
+            return null
+        }
+        return file.toURI().toString()
+    }
+
+    fun downloadedTrackIds(): Set<String> =
+        prefs.all.keys.filter { it.startsWith("file:") }.mapNotNull { key ->
+            val id = key.removePrefix("file:")
+            val path = prefs.getString(key, null)
+            if (path != null && File(path).exists() && File(path).length() > 0L) id
+            else { prefs.edit().remove(key).apply(); null }
+        }.toSet()
+
+    fun totalBytes(): Long =
+        prefs.all.keys.filter { it.startsWith("file:") }.sumOf { key ->
+            prefs.getString(key, null)?.let(::File)?.takeIf { it.exists() }?.length() ?: 0L
+        }
+
+    fun clearAll() {
+        prefs.all.keys.filter { it.startsWith("file:") }.forEach { key ->
+            prefs.getString(key, null)?.let { File(it).delete() }
+        }
+        prefs.edit().clear().apply()
+    }
 
     suspend fun download(track: Track): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
