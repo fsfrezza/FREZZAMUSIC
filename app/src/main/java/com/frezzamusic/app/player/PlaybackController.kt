@@ -9,6 +9,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.frezzamusic.app.data.SettingsRepository
+import com.frezzamusic.app.data.OfflineDownloadRepository
 import com.frezzamusic.app.data.StreamResolver
 import com.frezzamusic.app.data.UserLibraryRepository
 import com.frezzamusic.app.model.Track
@@ -25,6 +26,7 @@ class PlaybackController(
         private set
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val settings = SettingsRepository(context)
+    private val offline = OfflineDownloadRepository(context, resolver)
     var onChanged: (() -> Unit)? = null
     private var lastRecorded: String? = null
     private var checkpointJob: Job? = null
@@ -126,7 +128,7 @@ class PlaybackController(
     }
 
     private suspend fun toItem(t: Track): MediaItem {
-        val u = if (t.remote) resolver.resolve(t).url else t.uri
+        val u = if (t.remote) offline.localUri(t) ?: resolver.resolve(t).url else t.uri
         return MediaItem.Builder()
             .setMediaId(t.id)
             .setUri(u)
