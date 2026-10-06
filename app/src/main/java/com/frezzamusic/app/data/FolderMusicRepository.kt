@@ -3,6 +3,7 @@ package com.frezzamusic.app.data
 import android.content.Context
 import android.net.Uri
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import com.frezzamusic.app.model.Track
@@ -25,9 +26,11 @@ class FolderMusicRepository(private val context: Context) {
     }
     fun scanDevice(): List<Track> {
         val out= mutableListOf<Track>(); val collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection=arrayOf(MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_MODIFIED,MediaStore.Audio.Media.TRACK,MediaStore.Audio.Media.GENRE,MediaStore.Audio.Media.ALBUM_ID,MediaStore.Audio.Media.RELATIVE_PATH)
+        val projection=mutableListOf(MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_MODIFIED,MediaStore.Audio.Media.TRACK,MediaStore.Audio.Media.GENRE,MediaStore.Audio.Media.ALBUM_ID).apply {
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.Audio.Media.RELATIVE_PATH)
+        }.toTypedArray()
         context.contentResolver.query(collection,projection,MediaStore.Audio.Media.IS_MUSIC+" != 0",null,MediaStore.Audio.Media.TITLE+" ASC")?.use { cur ->
-            val idI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media._ID); val titleI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE); val artistI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST); val albumI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM); val durI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION); val dateI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED); val trackI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK); val genreI=cur.getColumnIndex(MediaStore.Audio.Media.GENRE); val albumIdI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID); val pathI=cur.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+            val idI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media._ID); val titleI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE); val artistI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST); val albumI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM); val durI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION); val dateI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED); val trackI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK); val genreI=cur.getColumnIndex(MediaStore.Audio.Media.GENRE); val albumIdI=cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID); val pathI=if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) cur.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH) else -1
             while(cur.moveToNext()){
                 val id=cur.getLong(idI)
                 val uri=Uri.withAppendedPath(collection,id.toString())
