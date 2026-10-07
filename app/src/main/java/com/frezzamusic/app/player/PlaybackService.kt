@@ -82,8 +82,8 @@ class PlaybackService:MediaSessionService(){
       }
       val previous=spectrum
       spectrum=(0 until bins).map{b->
-       val start=((kotlin.math.pow(b.toDouble()/bins,2.0))*(magnitudes.size-1)).toInt().coerceIn(0,magnitudes.lastIndex)
-       val end=((kotlin.math.pow((b+1).toDouble()/bins,2.0))*(magnitudes.size-1)).toInt().coerceIn(start,magnitudes.lastIndex)
+       val start=(((b.toDouble()/bins).let{it*it})*(magnitudes.size-1)).toInt().coerceIn(0,magnitudes.lastIndex)
+       val end=((((b+1).toDouble()/bins).let{it*it})*(magnitudes.size-1)).toInt().coerceIn(start,magnitudes.lastIndex)
        val peak=magnitudes.subList(start,end+1).maxOrNull()?:0.0
        val scaled=(kotlin.math.ln1p(peak)/kotlin.math.ln(129.0)*128.0).toInt().coerceIn(0,128)
        val old=previous.getOrNull(b)?:0
