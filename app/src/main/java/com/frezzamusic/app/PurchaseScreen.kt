@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.dp
 import com.frezzamusic.app.model.*
 import java.text.NumberFormat
 import java.util.Locale
-private const val TRACK_PRICE=2.99
-private const val ALBUM_PRICE=19.99
+private const val TRACK_PRICE=3.90
+private const val ALBUM_PRICE=19.90
 @Composable fun PurchaseScreen(artists:List<Artist>,initialTrack:Track?,initialAlbum:Album?,onClose:()->Unit){
  val albums=remember(artists){artists.flatMap{it.albums}};val selected=remember{mutableStateMapOf<String,Boolean>()};val expanded=remember{mutableStateMapOf<String,Boolean>()};var showPaymentInfo by remember{mutableStateOf(false)}
  LaunchedEffect(initialTrack?.id,initialAlbum?.id){selected.clear();expanded.clear();if(initialTrack!=null){selected[initialTrack.id]=true;initialAlbum?.let{expanded[it.id]=true}}else if(initialAlbum!=null){initialAlbum.tracks.forEach{selected[it.id]=true};expanded[initialAlbum.id]=true}}
