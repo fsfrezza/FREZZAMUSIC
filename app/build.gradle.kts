@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.21.2"
+        versionCode = 24
+        versionName = "0.21.3"
     }
     flavorDimensions += "project"
     productFlavors {
