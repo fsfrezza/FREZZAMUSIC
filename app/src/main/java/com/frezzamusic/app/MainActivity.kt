@@ -465,6 +465,7 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             Text("Offline e streaming", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             ListItem(headlineContent = { Text("Downloads offline") }, supportingContent = { Text("$downloadedCount faixas • $storageLabel usados") }, leadingContent = { Icon(Icons.Default.Download, null) }, trailingContent = { if (downloadedCount > 0) TextButton(onClick = { confirmClear = true }) { Text("Limpar") } })
             ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
+            ListItem(headlineContent = { Text("Versão instalada") }, supportingContent = { Text("${BuildConfig.VERSION_NAME} • build ${BuildConfig.VERSION_CODE}") }, leadingContent = { Icon(Icons.Default.Info, null) })
         }
     }
     if (confirmClear) AlertDialog(
