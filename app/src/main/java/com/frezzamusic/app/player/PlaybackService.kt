@@ -84,13 +84,16 @@ class PlaybackService:MediaSessionService(){
       spectrum=(0 until bins).map{b->
        val start=(((b.toDouble()/bins).let{it*it})*(magnitudes.size-1)).toInt().coerceIn(0,magnitudes.lastIndex)
        val end=((((b+1).toDouble()/bins).let{it*it})*(magnitudes.size-1)).toInt().coerceIn(start,magnitudes.lastIndex)
-       val peak=magnitudes.subList(start,end+1).maxOrNull()?:0.0
-       val scaled=(kotlin.math.ln1p(peak)/kotlin.math.ln(129.0)*128.0).toInt().coerceIn(0,128)
+       val slice=magnitudes.subList(start,end+1)
+       val peak=slice.maxOrNull()?:0.0
+       val average=if(slice.isEmpty())0.0 else slice.average()
+       val energy=(peak*0.7)+(average*0.3)
+       val normalized=(kotlin.math.ln1p(energy)/kotlin.math.ln(181.0)*128.0).toInt().coerceIn(0,128)
        val old=previous.getOrNull(b)?:0
-       if(scaled>=old) scaled else (old*0.68).toInt()
+       if(normalized>=old) ((old*0.25)+(normalized*0.75)).toInt() else (old*0.52).toInt()
       }
      }
-    },Visualizer.getMaxCaptureRate()/2,true,true)
+    },Visualizer.getMaxCaptureRate(),false,true)
     v.enabled=visualizerEnabled;visualizerAvailable=true
    }
   }.onFailure{
