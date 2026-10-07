@@ -523,12 +523,12 @@ private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFa
 @Composable
 private fun PlayerTransportBar(playback: PlaybackController, playing: Boolean) {
     Surface(tonalElevation = 6.dp) {
-        Row(Modifier.fillMaxWidth().height(92.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceEvenly) {
-            IconButton(onClick=playback::shuffle,modifier=Modifier.size(56.dp)){Icon(Icons.Default.Shuffle,"Aleatório",Modifier.size(30.dp))}
-            IconButton(onClick=playback::previous,modifier=Modifier.size(68.dp)){Icon(Icons.Default.SkipPrevious,"Anterior",Modifier.size(46.dp))}
-            FilledIconButton(onClick=playback::toggle,modifier=Modifier.size(76.dp)){Icon(if(playing) Icons.Default.Pause else Icons.Default.PlayArrow,"Reproduzir",Modifier.size(50.dp))}
-            IconButton(onClick=playback::next,modifier=Modifier.size(68.dp)){Icon(Icons.Default.SkipNext,"Próxima",Modifier.size(46.dp))}
-            IconButton(onClick=playback::repeat,modifier=Modifier.size(56.dp)){Icon(Icons.Default.Repeat,"Repetição",Modifier.size(30.dp))}
+        Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceEvenly) {
+            IconButton(onClick=playback::shuffle,modifier=Modifier.size(48.dp)){Icon(Icons.Default.Shuffle,"Aleatório",Modifier.size(28.dp))}
+            IconButton(onClick=playback::previous,modifier=Modifier.size(56.dp)){Icon(Icons.Default.SkipPrevious,"Anterior",Modifier.size(38.dp))}
+            FilledIconButton(onClick=playback::toggle,modifier=Modifier.size(64.dp)){Icon(if(playing) Icons.Default.Pause else Icons.Default.PlayArrow,"Reproduzir",Modifier.size(44.dp))}
+            IconButton(onClick=playback::next,modifier=Modifier.size(56.dp)){Icon(Icons.Default.SkipNext,"Próxima",Modifier.size(38.dp))}
+            IconButton(onClick=playback::repeat,modifier=Modifier.size(48.dp)){Icon(Icons.Default.Repeat,"Repetição",Modifier.size(28.dp))}
         }
     }
 }
