@@ -72,7 +72,21 @@ class PlaybackService:MediaSessionService(){
    visualizer=Visualizer(id).also{v->
     v.captureSize=Visualizer.getCaptureSizeRange()[1]
     v.setDataCaptureListener(object:Visualizer.OnDataCaptureListener{
-     override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){if(data!=null){val step=(data.size/48).coerceAtLeast(1);waveform=(0 until 48).map{i->(data[(i*step).coerceAtMost(data.lastIndex)].toInt() and 0xFF)-128}}}
+     override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){
+      if(data==null)return
+      val centered=data.map{(it.toInt() and 0xFF)-128}
+      val rms=kotlin.math.sqrt(centered.map{it.toDouble()*it}.average()).coerceAtLeast(1.0)
+      val previous=spectrum
+      val chunk=(centered.size/24).coerceAtLeast(1)
+      spectrum=(0 until 24).map{b->
+       val from=(b*chunk).coerceAtMost(centered.lastIndex)
+       val to=((b+1)*chunk).coerceAtMost(centered.size)
+       val local=if(to>from) kotlin.math.sqrt(centered.subList(from,to).map{it.toDouble()*it}.average()) else rms
+       val target=((local/rms)*54.0).toInt().coerceIn(4,128)
+       val old=previous.getOrNull(b)?:4
+       if(target>=old) ((old*0.15)+(target*0.85)).toInt() else ((old*0.45)+(target*0.55)).toInt()
+      }
+     }
      override fun onFftDataCapture(vis:Visualizer?,fft:ByteArray?,rate:Int){
       if(fft==null)return
       val bins=24
@@ -93,7 +107,7 @@ class PlaybackService:MediaSessionService(){
        if(normalized>=old) ((old*0.25)+(normalized*0.75)).toInt() else (old*0.52).toInt()
       }
      }
-    },Visualizer.getMaxCaptureRate(),false,true)
+    },(Visualizer.getMaxCaptureRate()/2).coerceAtLeast(10000),true,true)
     v.enabled=visualizerEnabled;visualizerAvailable=true
    }
   }.onFailure{
