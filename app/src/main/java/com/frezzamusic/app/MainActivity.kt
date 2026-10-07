@@ -65,7 +65,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         folders = FolderMusicRepository(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) visualizerPermission.launch(Manifest.permission.RECORD_AUDIO)
         setContent {
             FrezzaTheme {
                 FrezzaMusicApp(
