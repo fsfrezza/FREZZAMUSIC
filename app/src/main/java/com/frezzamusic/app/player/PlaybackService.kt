@@ -65,7 +65,7 @@ class PlaybackService:MediaSessionService(){
   }.onFailure{equalizerAvailable=false;presetNames=emptyList()}
  }
  private fun attachVisualizer(id:Int){
-  if(id<=0)return
+  if(id<=0 || !visualizerEnabled)return
   if(id==visualizerSessionId&&visualizer!=null){updateVisualizerState();return}
   runCatching{
    visualizer?.release();visualizerSessionId=id
