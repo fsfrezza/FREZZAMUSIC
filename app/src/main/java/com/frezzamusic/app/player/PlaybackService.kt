@@ -19,7 +19,7 @@ class PlaybackService:MediaSessionService(){
   @Volatile var spectrum:List<Int> = emptyList(); private set
   @Volatile var waveform:List<Int> = emptyList(); private set
   @Volatile var visualizerAvailable:Boolean=false; private set
-  @Volatile var visualizerEnabled:Boolean=true; private set
+  @Volatile var visualizerEnabled:Boolean=false; private set
   private const val VISUALIZER_PREFS="playback_visualizer"
   private const val VISUALIZER_ENABLED="enabled"
   private var instance:PlaybackService?=null
@@ -36,7 +36,7 @@ class PlaybackService:MediaSessionService(){
  }
  override fun onCreate(){
   super.onCreate();instance=this
-  visualizerEnabled=getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE).getBoolean(VISUALIZER_ENABLED,true)
+  visualizerEnabled=getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE).getBoolean(VISUALIZER_ENABLED,false)
   val p=ExoPlayer.Builder(this).build()
   p.addListener(object:Player.Listener{
    override fun onAudioSessionIdChanged(id:Int){
