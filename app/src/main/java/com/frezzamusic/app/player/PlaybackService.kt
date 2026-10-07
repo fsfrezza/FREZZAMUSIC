@@ -75,11 +75,19 @@ class PlaybackService:MediaSessionService(){
      override fun onWaveFormDataCapture(vis:Visualizer?,data:ByteArray?,rate:Int){if(data!=null){val step=(data.size/48).coerceAtLeast(1);waveform=(0 until 48).map{i->(data[(i*step).coerceAtMost(data.lastIndex)].toInt() and 0xFF)-128}}}
      override fun onFftDataCapture(vis:Visualizer?,fft:ByteArray?,rate:Int){
       if(fft==null)return
-      val bins=24;val step=(fft.size/2/bins).coerceAtLeast(1)
+      val bins=24
+      val magnitudes=(1 until fft.size/2).map{k->
+       val re=fft[k*2].toInt();val im=fft[k*2+1].toInt()
+       kotlin.math.sqrt((re*re+im*im).toDouble())
+      }
+      val previous=spectrum
       spectrum=(0 until bins).map{b->
-       val k=((b*step)*2).coerceIn(2,fft.size-2)
-       val re=fft[k].toInt();val im=fft[k+1].toInt()
-       kotlin.math.sqrt((re*re+im*im).toDouble()).toInt().coerceIn(0,128)
+       val start=((kotlin.math.pow(b.toDouble()/bins,2.0))*(magnitudes.size-1)).toInt().coerceIn(0,magnitudes.lastIndex)
+       val end=((kotlin.math.pow((b+1).toDouble()/bins,2.0))*(magnitudes.size-1)).toInt().coerceIn(start,magnitudes.lastIndex)
+       val peak=magnitudes.subList(start,end+1).maxOrNull()?:0.0
+       val scaled=(kotlin.math.ln1p(peak)/kotlin.math.ln(129.0)*128.0).toInt().coerceIn(0,128)
+       val old=previous.getOrNull(b)?:0
+       if(scaled>=old) scaled else (old*0.68).toInt()
       }
      }
     },Visualizer.getMaxCaptureRate()/2,true,true)
