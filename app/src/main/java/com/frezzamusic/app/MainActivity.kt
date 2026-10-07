@@ -100,6 +100,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var playerExpanded by remember { mutableStateOf(false) }
+    var fullPlayerPage by remember { mutableIntStateOf(0) }
     val onboardingPrefs=remember{context.getSharedPreferences("onboarding",android.content.Context.MODE_PRIVATE)}
     var showMediaPrompt by remember{mutableStateOf(!onboardingPrefs.getBoolean("media_prompt_done",false))}
     var deviceScan by remember{mutableStateOf(onboardingPrefs.getBoolean("scan_device",false))}
@@ -136,12 +137,16 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     Scaffold(
         bottomBar = {
             Column {
-                MiniPlayer(
-                    track = currentTrack,
-                    playing = controller?.isPlaying == true,
-                    toggle = playback::toggle,
-                    expand = { if (currentTrack != null) playerExpanded = true }
-                )
+                if(playerExpanded && fullPlayerPage==0) {
+                    PlayerTransportBar(playback, controller?.isPlaying == true)
+                } else {
+                    MiniPlayer(
+                        track = currentTrack,
+                        playing = controller?.isPlaying == true,
+                        toggle = playback::toggle,
+                        expand = { if (currentTrack != null) { fullPlayerPage=0; playerExpanded = true } }
+                    )
+                }
                 NavigationBar {
                     val tabs = listOf(
                         AppTab.HOME to Icons.Default.Home,
@@ -174,7 +179,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
             }
             if (playerExpanded) {
                 Surface(Modifier.fillMaxSize()) {
-                    FullPlayer(currentTrack, playback, user, requestVisualizerAccess = requestVisualizerAccess, onClose = { playerExpanded = false })
+                    FullPlayer(currentTrack, playback, user, requestVisualizerAccess = requestVisualizerAccess, onPageChanged = { fullPlayerPage=it }, onClose = { playerExpanded = false })
                 }
             }
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -513,6 +518,19 @@ private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFa
         trailingContent = { IconButton(onClick = toggleFavorite) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null) } },
         modifier = Modifier.clickable(onClick = play)
     )
+}
+
+@Composable
+private fun PlayerTransportBar(playback: PlaybackController, playing: Boolean) {
+    Surface(tonalElevation = 6.dp) {
+        Row(Modifier.fillMaxWidth().height(92.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceEvenly) {
+            IconButton(onClick=playback::shuffle,modifier=Modifier.size(56.dp)){Icon(Icons.Default.Shuffle,"Aleatório",Modifier.size(30.dp))}
+            IconButton(onClick=playback::previous,modifier=Modifier.size(68.dp)){Icon(Icons.Default.SkipPrevious,"Anterior",Modifier.size(46.dp))}
+            FilledIconButton(onClick=playback::toggle,modifier=Modifier.size(76.dp)){Icon(if(playing) Icons.Default.Pause else Icons.Default.PlayArrow,"Reproduzir",Modifier.size(50.dp))}
+            IconButton(onClick=playback::next,modifier=Modifier.size(68.dp)){Icon(Icons.Default.SkipNext,"Próxima",Modifier.size(46.dp))}
+            IconButton(onClick=playback::repeat,modifier=Modifier.size(56.dp)){Icon(Icons.Default.Repeat,"Repetição",Modifier.size(30.dp))}
+        }
+    }
 }
 
 @Composable
