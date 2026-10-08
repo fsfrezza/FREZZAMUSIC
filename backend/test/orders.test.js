@@ -37,3 +37,12 @@ test("users cannot access other users orders",()=>withStore(path=>{
 test("invalid quote rejected",()=>withStore(path=>{
  assert.throws(()=>new OrderStore(path).createPending({userId:"u",idempotencyKey:"k",quote:{currency:"BRL",totalCents:0,items:[]}}));
 }));
+
+test("independent stores observe persisted orders and idempotency",()=>withStore(path=>{
+ const first=new OrderStore(path);
+ const second=new OrderStore(path);
+ const args={userId:"u1",idempotencyKey:"same-key",quote};
+ const order=first.createPending(args);
+ assert.equal(second.findForUser(order.id,"u1").id,order.id);
+ assert.equal(second.createPending(args).id,order.id);
+}));
