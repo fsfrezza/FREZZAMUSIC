@@ -15,6 +15,6 @@ test("expired token rejected",()=>assert.equal(verifyAccessToken(sign({...claims
 test("invalid audience rejected",()=>assert.equal(verifyAccessToken(sign({...claims,aud:"other"}),secret,1000),null));
 test("invalid issuer rejected",()=>assert.equal(verifyAccessToken(sign({...claims,iss:"other"}),secret,1000),null));
 test("algorithm confusion rejected",()=>assert.equal(verifyAccessToken(sign(claims,"none"),secret,1000),null));
-test("tampering rejected",()=>assert.equal(verifyAccessToken(sign(claims).replace("user-123","admin"),secret,1000),null));
+test("tampering rejected",()=>assert.equal(verifyAccessToken(sign({...claims,sub:"admin"}).replace(/\.[^.]+$/, "."+sign(claims).split(".")[2]),secret,1000),null));
 test("missing token rejected",()=>assert.equal(verifyAccessToken(undefined,secret),null));
 test("short secret rejected",()=>assert.throws(()=>verifyAccessToken(sign(claims),"weak")));
