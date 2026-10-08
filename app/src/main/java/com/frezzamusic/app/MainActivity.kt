@@ -175,7 +175,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
-                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback)
+                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> onPlay(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback)
             }
@@ -333,7 +333,7 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
  }
 }
 @Composable
-private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, playback: PlaybackController) {
+private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, playback: PlaybackController, onPlay: (Track, List<Track>) -> Unit) {
     var name by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<UserPlaylist?>(null) }
     var revision by remember { mutableIntStateOf(0) }
@@ -344,12 +344,12 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
                 TextButton(onClick = { selected = null }) { Icon(Icons.Default.ArrowBack, null); Text("Listas") }
                 Text(playlist.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 val tracks = playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }
-                Button(onClick = { tracks.firstOrNull()?.let { playback.play(it, tracks) } }, enabled = tracks.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text(" Reproduzir") }
+                Button(onClick = { tracks.firstOrNull()?.let { onPlay(it, tracks) } }, enabled = tracks.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text(" Reproduzir") }
             }
             items(playlist.trackIds.mapNotNull { id -> all.find { it.id == id } }, key = { it.id }) { track ->
                 ListItem(headlineContent = { Text(track.title) }, supportingContent = { Text(track.artist) },
                     trailingContent = { IconButton(onClick = { user.removeFromPlaylist(playlist.id, track.id); revision++ }) { Icon(Icons.Default.RemoveCircleOutline, null) } },
-                    modifier = Modifier.clickable { val tracks=playlist.trackIds.mapNotNull { id->all.find { it.id==id } }; playback.play(track, tracks) })
+                    modifier = Modifier.clickable { val tracks=playlist.trackIds.mapNotNull { id->all.find { it.id==id } }; onPlay(track, tracks) })
             }
             item { Text("Adicionar faixas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp)) }
             items(all.filter { it.id !in playlist.trackIds }, key = { "add-" + it.id }) { track ->
