@@ -20,6 +20,8 @@ private const val ALBUM_PRICE=14.99
  val albums=remember(artists){artists.flatMap{it.albums}};val selected=remember{mutableStateMapOf<String,Boolean>()};val expanded=remember{mutableStateMapOf<String,Boolean>()};var showPaymentInfo by remember{mutableStateOf(false)}
  LaunchedEffect(initialTrack?.id,initialAlbum?.id){selected.clear();expanded.clear();if(initialTrack!=null){selected[initialTrack.id]=true;initialAlbum?.let{expanded[it.id]=true}}else if(initialAlbum!=null){initialAlbum.tracks.forEach{selected[it.id]=true};expanded[initialAlbum.id]=true}}
  val chosenIds=selected.filterValues{it}.keys
+ val selectedAlbums=albums.filter{album->album.tracks.isNotEmpty()&&album.tracks.all{it.id in chosenIds}}
+ val selectedSingles=albums.flatMap{album->if(album in selectedAlbums)emptyList() else album.tracks.filter{it.id in chosenIds}}
  val total=albums.sumOf{album->val count=album.tracks.count{it.id in chosenIds};when{count==0->0.0;count==album.tracks.size->ALBUM_PRICE;else->count*TRACK_PRICE}}
  val currency=remember{NumberFormat.getCurrencyInstance(Locale("pt","BR"))}
  Scaffold(topBar={Surface(tonalElevation=3.dp){Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically){IconButton(onClick=onClose){Icon(Icons.Default.ArrowBack,"Voltar")};Column{Text("Downloads em alta qualidade",fontWeight=FontWeight.Bold);Text("Escolha faixas ou álbuns",style=MaterialTheme.typography.bodySmall)}}}},bottomBar={Surface(tonalElevation=6.dp){Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Total",style=MaterialTheme.typography.bodySmall);Text(currency.format(total),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)};Button(onClick={showPaymentInfo=true},enabled=chosenIds.isNotEmpty()){Icon(Icons.Default.Payment,null);Spacer(Modifier.width(8.dp));Text("Continuar")}}}}){pad->
@@ -31,5 +33,5 @@ private const val ALBUM_PRICE=14.99
    }
   }
  }
- if(showPaymentInfo)AlertDialog(onDismissRequest={showPaymentInfo=false},title={Text("Pagamento")},text={Text("Seleção: "+chosenIds.size+" faixa(s)\nTotal: "+currency.format(total)+"\n\nA seleção já está pronta para ser enviada ao provedor de pagamento. A cobrança será ativada quando o Google Play Billing/PIX e a validação pelo servidor estiverem configurados.")},confirmButton={Button(onClick={showPaymentInfo=false}){Text("Entendi")}},dismissButton={OutlinedButton(onClick={showPaymentInfo=false}){Text("Voltar")}})
+ if(showPaymentInfo)AlertDialog(onDismissRequest={showPaymentInfo=false},title={Text("Pagamento")},text={Text("Álbuns completos: "+selectedAlbums.size+"\nFaixas avulsas: "+selectedSingles.size+"\nTotal: "+currency.format(total)+"\n\nO pagamento ainda não está disponível. Nenhuma cobrança será realizada até que a integração e a validação pelo servidor estejam configuradas.")},confirmButton={Button(onClick={showPaymentInfo=false}){Text("Entendi")}},dismissButton={OutlinedButton(onClick={showPaymentInfo=false}){Text("Voltar")}})
 }
