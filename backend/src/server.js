@@ -13,7 +13,7 @@ export function createAppServer(catalog = loadCatalog()) {
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
     if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
       const secret=process.env.ACCESS_TOKEN_SECRET;
-      if(!secret) return respond(503,{error:"Serviço de autenticação ainda não configurado"});
+      if(!secret) return respond(401,{error:"Autenticação indisponível; acesso negado"});
       const identity=verifyAccessToken(req.headers.authorization,secret);
       if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
       return respond(501,{error:"Persistência de pedidos ainda não conectada à API"});
