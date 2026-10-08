@@ -1,8 +1,9 @@
 import {createServer} from "node:http";
 import {quoteSelection} from "./pricing.js";
+import {loadCatalog} from "./catalog.js";
 
 const port = Number(process.env.PORT ?? 8080);
-const catalog = [];
+const catalog = loadCatalog();
 const server = createServer(async (req,res)=>{
   const respond=(status,data)=>{res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store"});res.end(JSON.stringify(data));};
   if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
