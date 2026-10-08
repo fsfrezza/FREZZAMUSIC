@@ -27,12 +27,17 @@ test("authenticated orders persist, are idempotent and user-scoped",async()=>{
   const order=await first.json();
   assert.equal(order.status,"pending");
   assert.equal(order.amountCents,1499);
+  assert.equal(Object.hasOwn(order,"userId"),false);
+  assert.equal(Object.hasOwn(order,"idempotencyKey"),false);
   const repeated=await post("u1",{trackIds:["t1","t2"]});
   assert.equal((await repeated.json()).id,order.id);
   const conflict=await post("u1",{trackIds:["t1"]});
   assert.equal(conflict.status,409);
   const own=await fetch(base+"/v1/orders/"+order.id,{headers:{authorization:token("u1")}});
   assert.equal(own.status,200);
+  const ownOrder=await own.json();
+  assert.equal(Object.hasOwn(ownOrder,"userId"),false);
+  assert.equal(Object.hasOwn(ownOrder,"idempotencyKey"),false);
   const other=await fetch(base+"/v1/orders/"+order.id,{headers:{authorization:token("u2")}});
   assert.equal(other.status,404);
   const noAuth=await fetch(base+"/v1/orders/"+order.id);
