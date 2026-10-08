@@ -175,7 +175,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage)
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
-                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> onPlay(track, tracks); fullPlayerPage=0; playerExpanded=true })
+                AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback)
             }
