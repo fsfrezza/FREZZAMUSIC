@@ -64,6 +64,10 @@ class OfflineDownloadRepository(
         runCatching {
             require(track.remote) { "Somente faixas remotas podem ser baixadas" }
             require(track.canDownload) { "Download não liberado para esta faixa" }
+            // Until a trusted backend verifies purchase entitlements, paid downloads fail closed.
+            require(track.downloadPriceBrl == null || track.downloadPriceBrl <= 0.0) {
+                "Download pago indisponível até a confirmação da compra pelo servidor"
+            }
             val target = file(track)
             target.parentFile?.mkdirs()
             val url = resolver.resolve(track).url
