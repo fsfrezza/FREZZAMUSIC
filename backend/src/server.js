@@ -9,6 +9,10 @@ export function createAppServer(catalog = loadCatalog()) {
       res.end(JSON.stringify(data));
     };
     if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
+    // Never trust a client-supplied user ID: order endpoints require verified server authentication.
+    if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
+      return respond(401,{error:"Autenticação obrigatória; serviço de identidade ainda não configurado"});
+    }
     if(req.method==="POST" && req.url==="/v1/checkout/quote"){
       let body="";
       try {
