@@ -1,6 +1,7 @@
 import {createServer} from "node:http";
 import {quoteSelection} from "./pricing.js";
 import {loadCatalog} from "./catalog.js";
+import {verifyAccessToken} from "./auth.js";
 
 export function createAppServer(catalog = loadCatalog()) {
   return createServer(async (req,res)=>{
@@ -11,7 +12,11 @@ export function createAppServer(catalog = loadCatalog()) {
     if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
     if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
-      return respond(401,{error:"Autenticação obrigatória; serviço de identidade ainda não configurado"});
+      const secret=process.env.ACCESS_TOKEN_SECRET;
+      if(!secret) return respond(503,{error:"Serviço de autenticação ainda não configurado"});
+      const identity=verifyAccessToken(req.headers.authorization,secret);
+      if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
+      return respond(501,{error:"Persistência de pedidos ainda não conectada à API"});
     }
     if(req.method==="POST" && req.url==="/v1/checkout/quote"){
       let body="";
