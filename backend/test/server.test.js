@@ -31,3 +31,12 @@ test("oversized request rejected",()=>withServer([{id:"a",tracks:[{id:"x"}]}],as
  const res=await fetch(base+"/v1/checkout/quote",{method:"POST",body:JSON.stringify({trackIds:["x"],padding:"x".repeat(70000)})});
  assert.equal(res.status,413);
 }));
+
+test("creating an order without verified identity returns 401",()=>withServer([{id:"a",tracks:[{id:"x"}]}],async base=>{
+ const res=await fetch(base+"/v1/checkout/orders",{method:"POST",headers:{"content-type":"application/json","x-user-id":"forged"},body:JSON.stringify({trackIds:["x"]})});
+ assert.equal(res.status,401);
+}));
+test("reading an order without verified identity returns 401",()=>withServer([],async base=>{
+ const res=await fetch(base+"/v1/orders/guess",{headers:{"x-user-id":"forged"}});
+ assert.equal(res.status,401);
+}));
