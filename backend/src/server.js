@@ -20,6 +20,7 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
     if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
     if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
+      if(typeof req.headers.authorization!=="string" || !req.headers.authorization.startsWith("Bearer ")) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(typeof authSecret!=="string" || Buffer.byteLength(authSecret)<32) return respond(503,{error:"Autenticação não configurada"});
       const identity=verifyAccessToken(req.headers.authorization,authSecret);
       if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
