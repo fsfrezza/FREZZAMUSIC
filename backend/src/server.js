@@ -22,7 +22,7 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
     };
     if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
-    if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
+    if(req.url==="/v1/me/entitlements" || req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
       if(typeof req.headers.authorization!=="string" || !req.headers.authorization.startsWith("Bearer ")) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(!verifyIdentity && (typeof authSecret!=="string" || Buffer.byteLength(authSecret)<32)) return respond(503,{error:"Autenticação não configurada"});
       let identity;
@@ -30,6 +30,12 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
       catch {return respond(503,{error:"Falha na verificação de autenticação"});}
       if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(!store) return respond(503,{error:"Armazenamento de pedidos não configurado"});
+      if(req.url==="/v1/me/entitlements") {
+        if(req.method!=="GET") return respond(405,{error:"Método não permitido"});
+        if(typeof store.entitlementsForUser!=="function") return respond(503,{error:"Biblioteca de compras não configurada"});
+        try {return respond(200,await store.entitlementsForUser(identity.userId));}
+        catch {return respond(500,{error:"Erro interno"});}
+      }
       if(req.method==="GET" && req.url.startsWith("/v1/orders/")) {
         const id=req.url.slice("/v1/orders/".length);
         if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return respond(404,{error:"Pedido não encontrado"});
