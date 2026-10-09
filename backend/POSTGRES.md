@@ -15,4 +15,11 @@ Não configure credenciais reais no repositório. Para ativar compras reais, ain
 4. Configurar `DATABASE_URL` por variável de ambiente ou gerenciador de segredos, **nunca no Git**.
 5. Configurar `ACCESS_TOKEN_SECRET` (JWT de desenvolvimento) e `CATALOG_FILE`; iniciar com `npm start`.
 
-A autenticação Firebase ainda não está implementada. **Não habilitar pagamentos reais** com a autenticação de desenvolvimento.
+A verificação de tokens Firebase ID está implementada no backend quando `FIREBASE_PROJECT_ID` é configurado. O servidor usa credenciais padrão de aplicação (ADC) do Firebase Admin SDK e exige verificação de revogação. Cadastro/login nos aplicativos Android ainda não estão implementados. Sem Firebase configurado, permanece a autenticação JWT de desenvolvimento. Em `NODE_ENV=production`, a inicialização exige `FIREBASE_PROJECT_ID`. **Não habilitar pagamentos reais** antes de concluir a integração e testes com credenciais reais.
+
+## Firebase Authentication
+1. Criar projeto Firebase, habilitar os provedores de login desejados e configurar os aplicativos Android.
+2. Configurar `FIREBASE_PROJECT_ID` no ambiente do backend.
+3. Fornecer credenciais via Application Default Credentials/identidade do serviço (sem gravar arquivos secretos no Git).
+4. Os clientes enviarão `Authorization: Bearer <Firebase ID token>`; o servidor verifica assinatura, projeto, emissor e revogação por meio do Admin SDK.
+5. O cliente Android e a recuperação de sessão ainda precisam ser implementados.
