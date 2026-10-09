@@ -27,7 +27,7 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
       if(!store) return respond(503,{error:"Armazenamento de pedidos não configurado"});
       if(req.method==="GET" && req.url.startsWith("/v1/orders/")) {
         const id=req.url.slice("/v1/orders/".length);
-        const order=store.findForUser(id,identity.userId);
+        const order=await store.findForUser(id,identity.userId);
         return order ? respond(200,publicOrder(order)) : respond(404,{error:"Pedido não encontrado"});
       }
       if(req.method==="POST" && req.url==="/v1/checkout/orders") {
@@ -42,11 +42,11 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
           const quote=quoteSelection(catalog,selection);
           const key=req.headers["idempotency-key"];
           if(typeof key!=="string" || key.length<8 || key.length>128) return respond(400,{error:"Idempotency-Key inválida"});
-          const order=store.createPending({userId:identity.userId,idempotencyKey:key,quote});
+          const order=await store.createPending({userId:identity.userId,idempotencyKey:key,quote});
           return respond(200,publicOrder(order));
         }catch(e) {
           if(e instanceof SyntaxError || e instanceof TypeError || e instanceof RangeError) return respond(400,{error:e.message});
-          if(e.message==="Chave de idempotência reutilizada com seleção diferente") return respond(409,{error:e.message});
+          if(e.code==="IDEMPOTENCY_CONFLICT" || e.message==="Chave de idempotência reutilizada com seleção diferente") return respond(409,{error:e.message});
           return respond(500,{error:"Erro interno"});
         }
       }
