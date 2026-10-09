@@ -20,7 +20,7 @@
 - `POST /v1/checkout/quote`: **implementado em desenvolvimento**; recebe IDs de faixas/álbuns e devolve itens normalizados, valores em centavos, moeda BRL e total. Ainda não fornece `quote_id` ou expiração.
 - `POST /v1/checkout/orders`: **implementado em desenvolvimento**; recebe seleção de IDs, token JWT verificado e `Idempotency-Key`; calcula novamente a cotação e cria pedido pendente. Não recebe `quote_id` ainda.
 - `GET /v1/orders/{id}`: **implementado em desenvolvimento**; retorna apenas os dados públicos do pedido do usuário autenticado.
-- `GET /v1/me/entitlements`: IDs de faixas e álbuns autorizados.
+- `GET /v1/me/entitlements`: **implementado no backend com PostgreSQL**; devolve `{trackIds: [...]}` apenas para o usuário autenticado, considerando direitos ativos de pedidos pagos. A interface Android e a concessão dos direitos após pagamento ainda não estão implementadas.
 - `POST /v1/downloads/{trackId}/authorize`: exige direito confirmado; retorna URL curta assinada, limitada ao arquivo autorizado.
 - `POST /v1/payments/webhook`: valida assinatura, origem, pedido, valor, moeda e status; processa idempotentemente.
 
@@ -58,3 +58,6 @@ Escolher hospedagem/API, banco de dados, provedor de pagamento conforme canal de
 - **Distribuição:** variantes Play e APK direto com identificadores de canal confiáveis no build, sem escolher provedor apenas por detectar Play Store instalada.
 - **Não implementado:** cadastro/login, Firebase, PostgreSQL, Mercado Pago, Play Billing, direitos de download, URL temporária, infraestrutura de produção.
 - **Nenhuma compra deve liberar arquivos até confirmação de pagamento validada no servidor.**
+
+## Biblioteca Minhas Compras — etapa atual
+A consulta de direitos é somente leitura. Não existe endpoint público que conceda direitos ou marque pedidos como pagos. Pedidos pendentes, direitos revogados e pedidos não pagos não devem aparecer na biblioteca. No modo JSON de desenvolvimento, a rota responde 503 porque esse armazenamento não mantém direitos de compra.
