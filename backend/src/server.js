@@ -27,7 +27,9 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
       if(!store) return respond(503,{error:"Armazenamento de pedidos não configurado"});
       if(req.method==="GET" && req.url.startsWith("/v1/orders/")) {
         const id=req.url.slice("/v1/orders/".length);
-        const order=await store.findForUser(id,identity.userId);
+        if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return respond(404,{error:"Pedido não encontrado"});
+        let order;
+        try {order=await store.findForUser(id,identity.userId);}catch{return respond(500,{error:"Erro interno"});}
         return order ? respond(200,publicOrder(order)) : respond(404,{error:"Pedido não encontrado"});
       }
       if(req.method==="POST" && req.url==="/v1/checkout/orders") {
