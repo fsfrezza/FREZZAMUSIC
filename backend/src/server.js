@@ -4,6 +4,7 @@ import {loadCatalog} from "./catalog.js";
 import {verifyAccessToken} from "./auth.js";
 import {OrderStore} from "./orders.js";
 import {PostgresOrderStore} from "./postgres-orders.js";
+import {createFirebaseIdentityVerifier} from "./firebase-auth.js";
 
 function publicOrder(order) {
   const {id,status,currency,amountCents,items,createdAt}=order;
@@ -13,6 +14,7 @@ function publicOrder(order) {
 export function createAppServer(catalog = loadCatalog(), options = {}) {
   const store = options.store ?? (process.env.ORDER_STORE_FILE ? new OrderStore(process.env.ORDER_STORE_FILE) : null);
   const authSecret = options.authSecret ?? process.env.ACCESS_TOKEN_SECRET;
+  const verifyIdentity = options.verifyIdentity;
   return createServer(async (req,res)=>{
     const respond=(status,data)=>{
       res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store"});
@@ -22,8 +24,10 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
     if(req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
       if(typeof req.headers.authorization!=="string" || !req.headers.authorization.startsWith("Bearer ")) return respond(401,{error:"Token de acesso inválido ou ausente"});
-      if(typeof authSecret!=="string" || Buffer.byteLength(authSecret)<32) return respond(503,{error:"Autenticação não configurada"});
-      const identity=verifyAccessToken(req.headers.authorization,authSecret);
+      if(!verifyIdentity && (typeof authSecret!=="string" || Buffer.byteLength(authSecret)<32)) return respond(503,{error:"Autenticação não configurada"});
+      let identity;
+      try {identity=verifyIdentity ? await verifyIdentity(req.headers.authorization) : verifyAccessToken(req.headers.authorization,authSecret);}
+      catch {return respond(503,{error:"Falha na verificação de autenticação"});}
       if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(!store) return respond(503,{error:"Armazenamento de pedidos não configurado"});
       if(req.method==="GET" && req.url.startsWith("/v1/orders/")) {
@@ -86,7 +90,10 @@ if(process.argv[1] && import.meta.url===new URL("file://"+process.argv[1]).href)
     }else if(process.env.ORDER_STORE_FILE) {
       store=new OrderStore(process.env.ORDER_STORE_FILE);
     }
-    const server=createAppServer(loadCatalog(),{store});
+    if(!process.env.FIREBASE_PROJECT_ID && process.env.NODE_ENV==="production") throw new Error("FIREBASE_PROJECT_ID obrigatório em produção");
+    const verifyIdentity=process.env.FIREBASE_PROJECT_ID
+      ? await createFirebaseIdentityVerifier({projectId:process.env.FIREBASE_PROJECT_ID}) : undefined;
+    const server=createAppServer(loadCatalog(),{store,verifyIdentity});
     server.listen(port,()=>console.log("FREZZAMUSIC backend listening on "+port));
     if(pool) server.on("close",()=>{void pool.end();});
   }
