@@ -58,6 +58,18 @@ export class PostgresOrderStore {
       throw error;
     }finally{client.release();}
   }
+  async entitlementsForUser(userId) {
+    if(typeof userId!=="string" || !userId) throw new TypeError("Usuário inválido");
+    const {rows}=await this.pool.query(
+      `SELECT DISTINCT e.track_id
+       FROM purchase_entitlements e
+       INNER JOIN purchase_orders o ON o.id=e.order_id AND o.user_id=e.user_id
+       WHERE e.user_id=$1 AND e.revoked_at IS NULL AND o.status='paid'
+       ORDER BY e.track_id`,
+      [userId]
+    );
+    return {trackIds:rows.map(row=>row.track_id)};
+  }
   async findForUser(orderId,userId) {
     const {rows}=await this.pool.query(
       "SELECT id,user_id,idempotency_key,status,currency,amount_cents,created_at FROM purchase_orders WHERE id=$1 AND user_id=$2",[orderId,userId]
