@@ -15,6 +15,7 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
   const store = options.store ?? (process.env.ORDER_STORE_FILE ? new OrderStore(process.env.ORDER_STORE_FILE) : null);
   const authSecret = options.authSecret ?? process.env.ACCESS_TOKEN_SECRET;
   const verifyIdentity = options.verifyIdentity;
+  const authorizeDownload = options.authorizeDownload;
   return createServer(async (req,res)=>{
     const respond=(status,data)=>{
       res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store"});
@@ -22,7 +23,7 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
     };
     if(req.method==="GET" && req.url==="/health") return respond(200,{ok:true});
     // Never trust a client-supplied user ID: order endpoints require verified server authentication.
-    if(req.url==="/v1/me/entitlements" || req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "")) {
+    if(req.url==="/v1/me/entitlements" || req.url==="/v1/checkout/orders" || /^\/v1\/orders\/[^/]+$/.test(req.url ?? "") || /^\/v1\/downloads\/[^/]+\/authorize$/.test(req.url ?? "")) {
       if(typeof req.headers.authorization!=="string" || !req.headers.authorization.startsWith("Bearer ")) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(!verifyIdentity && (typeof authSecret!=="string" || Buffer.byteLength(authSecret)<32)) return respond(503,{error:"Autenticação não configurada"});
       let identity;
@@ -30,6 +31,23 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
       catch {return respond(503,{error:"Falha na verificação de autenticação"});}
       if(!identity) return respond(401,{error:"Token de acesso inválido ou ausente"});
       if(!store) return respond(503,{error:"Armazenamento de pedidos não configurado"});
+      if(/^\/v1\/downloads\/[^/]+\/authorize$/.test(req.url)) {
+        if(req.method!=="POST") return respond(405,{error:"Método não permitido"});
+        const encodedId=req.url.slice("/v1/downloads/".length,-"/authorize".length);
+        let trackId;
+        try {trackId=decodeURIComponent(encodedId);}catch{return respond(400,{error:"Identificador inválido"});}
+        if(!trackId || trackId.length>256 || trackId.includes("/")) return respond(400,{error:"Identificador inválido"});
+        if(typeof store.canDownloadTrack!=="function") return respond(503,{error:"Direitos de download não configurados"});
+        try {
+          const allowed=await store.canDownloadTrack(identity.userId,trackId);
+          if(!allowed) return respond(403,{error:"Download não autorizado"});
+          if(typeof authorizeDownload!=="function") return respond(503,{error:"Entrega de arquivos não configurada"});
+          const result=await authorizeDownload({userId:identity.userId,trackId});
+          if(!result || typeof result.url!=="string" || !/^https:\/\//.test(result.url) ||
+             typeof result.expiresAt!=="string") return respond(503,{error:"Entrega de arquivos não configurada"});
+          return respond(200,{url:result.url,expiresAt:result.expiresAt});
+        }catch{return respond(500,{error:"Erro interno"});}
+      }
       if(req.url==="/v1/me/entitlements") {
         if(req.method!=="GET") return respond(405,{error:"Método não permitido"});
         if(typeof store.entitlementsForUser!=="function") return respond(503,{error:"Biblioteca de compras não configurada"});
