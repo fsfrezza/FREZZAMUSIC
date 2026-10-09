@@ -21,7 +21,7 @@
 - `POST /v1/checkout/orders`: **implementado em desenvolvimento**; recebe seleção de IDs, token JWT verificado e `Idempotency-Key`; calcula novamente a cotação e cria pedido pendente. Não recebe `quote_id` ainda.
 - `GET /v1/orders/{id}`: **implementado em desenvolvimento**; retorna apenas os dados públicos do pedido do usuário autenticado.
 - `GET /v1/me/entitlements`: **implementado no backend com PostgreSQL**; devolve `{trackIds: [...]}` apenas para o usuário autenticado, considerando direitos ativos de pedidos pagos. A interface Android e a concessão dos direitos após pagamento ainda não estão implementadas.
-- `POST /v1/downloads/{trackId}/authorize`: exige direito confirmado; retorna URL curta assinada, limitada ao arquivo autorizado.
+- `POST /v1/downloads/{trackId}/authorize`: **verificação de direito implementada no backend**; exige autenticação, pedido pago e direito ativo. A entrega de URL HTTPS temporária depende de um adaptador `authorizeDownload` ainda não conectado a um armazenamento privado. Sem adaptador, responde 503 e não fornece arquivo.
 - `POST /v1/payments/webhook`: valida assinatura, origem, pedido, valor, moeda e status; processa idempotentemente.
 
 ## Persistência proposta
@@ -61,3 +61,6 @@ Escolher hospedagem/API, banco de dados, provedor de pagamento conforme canal de
 
 ## Biblioteca Minhas Compras — etapa atual
 A consulta de direitos é somente leitura. Não existe endpoint público que conceda direitos ou marque pedidos como pagos. Pedidos pendentes, direitos revogados e pedidos não pagos não devem aparecer na biblioteca. No modo JSON de desenvolvimento, a rota responde 503 porque esse armazenamento não mantém direitos de compra.
+
+## Autorização de download — etapa atual
+O servidor valida o direito no PostgreSQL antes de chamar o adaptador de entrega. Sem direito responde 403; sem armazenamento configurado responde 503. Nenhuma URL pública é gerada pelo backend atual. O adaptador futuro deve assinar URLs com expiração curta, escopo limitado ao arquivo e armazenamento privado; o cliente Android ainda precisa consumir esse endpoint.
