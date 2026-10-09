@@ -70,6 +70,17 @@ export class PostgresOrderStore {
     );
     return {trackIds:rows.map(row=>row.track_id)};
   }
+  async canDownloadTrack(userId,trackId) {
+    if(typeof userId!=="string" || !userId || typeof trackId!=="string" || !trackId) throw new TypeError("Usuário ou faixa inválidos");
+    const {rows}=await this.pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM purchase_entitlements e
+         JOIN purchase_orders o ON o.id=e.order_id AND o.user_id=e.user_id
+         WHERE e.user_id=$1 AND e.track_id=$2 AND e.revoked_at IS NULL AND o.status='paid'
+       ) AS allowed`,[userId,trackId]
+    );
+    return rows[0]?.allowed===true;
+  }
   async findForUser(orderId,userId) {
     const {rows}=await this.pool.query(
       "SELECT id,user_id,idempotency_key,status,currency,amount_cents,created_at FROM purchase_orders WHERE id=$1 AND user_id=$2",[orderId,userId]
