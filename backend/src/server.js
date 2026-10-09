@@ -3,6 +3,7 @@ import {quoteSelection} from "./pricing.js";
 import {loadCatalog} from "./catalog.js";
 import {verifyAccessToken} from "./auth.js";
 import {OrderStore} from "./orders.js";
+import {PostgresOrderStore} from "./postgres-orders.js";
 
 function publicOrder(order) {
   const {id,status,currency,amountCents,items,createdAt}=order;
@@ -74,5 +75,20 @@ export function createAppServer(catalog = loadCatalog(), options = {}) {
 }
 if(process.argv[1] && import.meta.url===new URL("file://"+process.argv[1]).href) {
   const port=Number(process.env.PORT ?? 8080);
-  createAppServer().listen(port,()=>console.log("FREZZAMUSIC backend listening on "+port));
+  async function start() {
+    let pool;
+    let store;
+    if(process.env.DATABASE_URL) {
+      const {Pool}=await import("pg");
+      pool=new Pool({connectionString:process.env.DATABASE_URL});
+      await pool.query("SELECT 1");
+      store=new PostgresOrderStore(pool);
+    }else if(process.env.ORDER_STORE_FILE) {
+      store=new OrderStore(process.env.ORDER_STORE_FILE);
+    }
+    const server=createAppServer(loadCatalog(),{store});
+    server.listen(port,()=>console.log("FREZZAMUSIC backend listening on "+port));
+    if(pool) server.on("close",()=>{void pool.end();});
+  }
+  start().catch(error=>{console.error("Backend startup failed:",error.message);process.exitCode=1;});
 }
