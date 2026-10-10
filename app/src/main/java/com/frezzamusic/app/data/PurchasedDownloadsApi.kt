@@ -46,7 +46,7 @@ class PurchasedDownloadsApi(
             java.net.URLEncoder.encode(trackId, "UTF-8").replace("+", "%20") + "/authorize", "POST")
         val url = response.getString("url")
         val expiresAt = java.time.Instant.parse(response.getString("expiresAt"))
-        require(url.startsWith("https://") && expiresAt.isAfter(java.time.Instant.now())) {
+        require(java.net.URI(url).scheme.equals("https", ignoreCase = true) && expiresAt.isAfter(java.time.Instant.now())) {
             "Link de download inválido ou expirado"
         }
         return url
