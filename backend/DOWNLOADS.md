@@ -13,3 +13,8 @@ O gateway **deve** implementar validação de HMAC-SHA256 antes de servir qualqu
 **Limitação importante:** o gateway de entrega e os objetos privados **não foram provisionados**. O backend não serve os bytes diretamente. Sem configuração completa, o endpoint retorna 503 após confirmar o direito; não disponibiliza o áudio. Não aponte o assinador para um CDN público que ignore a assinatura.
 
 O áudio disponível para download não terá qualidade superior à reprodução gratuita.
+
+## Gateway local implementado
+O módulo `src/private-download-gateway.js` recebe links assinados, valida HMAC e validade, bloqueia travessia de diretórios e links simbólicos e transmite o arquivo privado. Para executar, defina `PRIVATE_DOWNLOAD_ROOT` (diretório com arquivos), `PRIVATE_DOWNLOAD_SIGNING_KEY` (mesmo segredo do assinador) e opcionalmente `PRIVATE_DOWNLOAD_PORT` (padrão 8081), depois execute `node src/private-download-gateway.js` em `backend/`. O serviço escuta apenas `127.0.0.1` e deve ficar atrás de um proxy HTTPS com acesso restrito. Não exponha a pasta privada por outro servidor estático.
+
+O gateway ainda precisa de provisionamento, configuração de proxy TLS e integração com o Android. URLs assinadas podem ser reutilizadas até expirar; a autorização é verificada antes da emissão, não novamente durante cada requisição do gateway. Para revogação imediata e auditoria, será necessária validação online no gateway.
