@@ -50,7 +50,7 @@ class PurchasedAudioStorage(
                     }
                 }
                 check(temp.length() > 0L) { "Arquivo de áudio vazio" }
-                check(temp.renameTo(destination)) { "Não foi possível concluir o download" }
+                java.nio.file.Files.move(temp.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
                 prefs.edit().putBoolean("saved:${destination.name}", true).apply()
                 destination
             } finally {
