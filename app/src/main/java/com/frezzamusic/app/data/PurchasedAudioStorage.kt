@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
+import java.io.IOException
 
 /**
  * Paid downloads are written only after the backend issues a short-lived signed URL.
@@ -19,6 +20,7 @@ class PurchasedAudioStorage(
 ) {
     private val prefs = context.getSharedPreferences("purchased_audio", Context.MODE_PRIVATE)
     private val directory = File(context.filesDir, "purchased_audio")
+    private val maxDownloadBytes = 200L * 1024 * 1024
 
     private fun safeName(trackId: String): String {
         require(trackId.isNotBlank()) { "Faixa inválida" }
@@ -42,11 +44,23 @@ class PurchasedAudioStorage(
             val destination = File(directory, safeName(trackId))
             val temp = File.createTempFile("purchase-", ".part", directory)
             try {
-                client.newCall(Request.Builder().url(url).header("Cache-Control", "no-store").build()).execute().use { response ->
+                val downloadClient = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+                downloadClient.newCall(Request.Builder().url(url).header("Cache-Control", "no-store").build()).execute().use { response ->
                     check(response.isSuccessful) { "Falha no download: HTTP ${response.code}" }
                     val body = checkNotNull(response.body) { "Resposta de download vazia" }
+                    check(body.contentLength() <= maxDownloadBytes) { "Arquivo maior que o limite permitido" }
                     temp.outputStream().use { output ->
-                        body.byteStream().use { input -> input.copyTo(output) }
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(64 * 1024)
+                            var written = 0L
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                written += count
+                                if (written > maxDownloadBytes) throw IOException("Download excedeu o limite de 200 MB")
+                                output.write(buffer, 0, count)
+                            }
+                        }
                     }
                 }
                 check(temp.length() > 0L) { "Arquivo de áudio vazio" }
