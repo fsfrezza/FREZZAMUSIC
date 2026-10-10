@@ -1,5 +1,5 @@
 import {createHmac,timingSafeEqual} from "node:crypto";
-import {createReadStream,statSync} from "node:fs";
+import {createReadStream,lstatSync,realpathSync,statSync} from "node:fs";
 import {createServer} from "node:http";
 import {resolve,sep} from "node:path";
 
@@ -11,7 +11,7 @@ export function createPrivateDownloadGateway({rootDir,secret,prefix="/private",n
   if(typeof rootDir!=="string" || !rootDir) throw new TypeError("Diretório privado obrigatório");
   if(typeof secret!=="string" || Buffer.byteLength(secret)<32) throw new TypeError("Chave de assinatura insuficiente");
   if(!/^\/[a-zA-Z0-9/_-]*$/.test(prefix) || prefix.endsWith("/")) throw new TypeError("Prefixo inválido");
-  const root=resolve(rootDir);
+  const root=realpathSync(resolve(rootDir));
   return createServer((req,res)=>{
     const reject=(status)=>{res.writeHead(status,{"cache-control":"no-store","content-type":"application/json"});res.end(JSON.stringify({error:status===403?"Acesso negado":"Arquivo não encontrado"}));};
     if(req.method!=="GET") return reject(403);
@@ -35,7 +35,17 @@ export function createPrivateDownloadGateway({rootDir,secret,prefix="/private",n
     const path=resolve(root,relative);
     if(!path.startsWith(root+sep)) return reject(403);
     let stat;
-    try {stat=statSync(path);if(!stat.isFile()) return reject(404);}catch{return reject(404);}
+    try {
+      const segments=relative.split("/");
+      let cursor=root;
+      for(const segment of segments) {
+        cursor=resolve(cursor,segment);
+        if(lstatSync(cursor).isSymbolicLink()) return reject(403);
+      }
+      if(realpathSync(path)!==path) return reject(403);
+      stat=statSync(path);
+      if(!stat.isFile()) return reject(404);
+    }catch{return reject(404);}
     res.writeHead(200,{"content-type":"application/octet-stream","content-length":stat.size,
       "content-disposition":`attachment; filename="${relative.split("/").at(-1)}"`,
       "cache-control":"private, no-store","x-content-type-options":"nosniff"});
