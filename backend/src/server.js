@@ -5,6 +5,7 @@ import {verifyAccessToken} from "./auth.js";
 import {OrderStore} from "./orders.js";
 import {PostgresOrderStore} from "./postgres-orders.js";
 import {createFirebaseIdentityVerifier} from "./firebase-auth.js";
+import {createDownloadSigner} from "./download-signer.js";
 
 function publicOrder(order) {
   const {id,status,currency,amountCents,items,createdAt}=order;
@@ -117,7 +118,19 @@ if(process.argv[1] && import.meta.url===new URL("file://"+process.argv[1]).href)
     if(!process.env.FIREBASE_PROJECT_ID && process.env.NODE_ENV==="production") throw new Error("FIREBASE_PROJECT_ID obrigatório em produção");
     const verifyIdentity=process.env.FIREBASE_PROJECT_ID
       ? await createFirebaseIdentityVerifier({projectId:process.env.FIREBASE_PROJECT_ID}) : undefined;
-    const server=createAppServer(loadCatalog(),{store,verifyIdentity});
+    let authorizeDownload;
+    if(process.env.PRIVATE_DOWNLOAD_BASE_URL || process.env.PRIVATE_DOWNLOAD_SIGNING_KEY || process.env.PRIVATE_DOWNLOAD_OBJECTS_FILE) {
+      if(!process.env.PRIVATE_DOWNLOAD_BASE_URL || !process.env.PRIVATE_DOWNLOAD_SIGNING_KEY || !process.env.PRIVATE_DOWNLOAD_OBJECTS_FILE)
+        throw new Error("Configuração de entrega privada incompleta");
+      const {readFileSync}=await import("node:fs");
+      const objects=JSON.parse(readFileSync(process.env.PRIVATE_DOWNLOAD_OBJECTS_FILE,"utf8"));
+      authorizeDownload=createDownloadSigner({
+        baseUrl:process.env.PRIVATE_DOWNLOAD_BASE_URL,
+        secret:process.env.PRIVATE_DOWNLOAD_SIGNING_KEY,
+        objects
+      });
+    }
+    const server=createAppServer(loadCatalog(),{store,verifyIdentity,authorizeDownload});
     server.listen(port,()=>console.log("FREZZAMUSIC backend listening on "+port));
     if(pool) server.on("close",()=>{void pool.end();});
   }
