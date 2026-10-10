@@ -13,3 +13,6 @@ A classe recebe a URL HTTPS do backend e uma função suspensa `tokenProvider` q
 O módulo `PurchasedAudioStorage` consulta os direitos no servidor, solicita URL assinada para a faixa e transfere o arquivo para o diretório interno do aplicativo. Usa arquivo temporário e substituição atômica após concluir a transferência. O nome do arquivo é derivado do SHA-256 do ID da faixa para impedir travessia de diretórios.
 
 **Ainda pendente:** vincular a classe às telas e ao player, autenticar o usuário com Firebase no Android, testar em dispositivos e tratar revogação/remoção de arquivos já baixados. O armazenamento interno evita exposição direta, mas não equivale a DRM; também é necessário limitar tamanho dos arquivos e reforçar a verificação de conteúdo antes da liberação em produção.
+
+## Limites de transferência
+O repositório de áudio comprado agora desabilita redirecionamentos HTTP(S) durante a transferência e impõe limite de 200 MB por arquivo, inclusive quando o servidor não informa Content-Length. Respostas incompletas ou acima do limite não são marcadas como baixadas. Antes da publicação, revisar limites conforme tamanho real do catálogo e incluir testes instrumentados de rede.
