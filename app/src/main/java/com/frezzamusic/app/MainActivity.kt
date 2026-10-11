@@ -187,7 +187,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
             }
             if (showMyPurchases) {
-                Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, purchasesApi, purchasedStorage, onClose = { showMyPurchases = false }) }
+                Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, purchasesApi, purchasedStorage, purchaseIdentity, onClose = { showMyPurchases = false }) }
             }
             if (showPurchase) {
                 Surface(Modifier.fillMaxSize()) { PurchaseScreen(artists, purchaseInitialTrack, purchaseInitialAlbum, onClose={showPurchase=false}) }
