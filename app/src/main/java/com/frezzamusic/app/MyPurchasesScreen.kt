@@ -10,6 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.frezzamusic.app.data.PurchasedAudioStorage
 import com.frezzamusic.app.data.PurchasedDownloadsApi
+import com.frezzamusic.app.data.PurchaseIdentity
 import com.frezzamusic.app.model.Track
 import kotlinx.coroutines.launch
 
@@ -22,10 +23,15 @@ fun MyPurchasesScreen(
     catalog: List<Track>,
     api: PurchasedDownloadsApi?,
     storage: PurchasedAudioStorage?,
+    identity: PurchaseIdentity?,
     onClose: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var ids by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var signedInEmail by remember { mutableStateOf(identity?.email().orEmpty()) }
+    var loginEmail by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var registering by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var activeDownload by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -41,7 +47,7 @@ fun MyPurchasesScreen(
             loading = false
         }
     }
-    LaunchedEffect(api) { refresh() }
+    LaunchedEffect(api, signedInEmail) { if (signedInEmail.isNotBlank()) refresh() }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Minhas Compras", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -49,9 +55,42 @@ fun MyPurchasesScreen(
         }
         Text("Ouça gratuitamente. Compras permitem baixar as músicas, sem diferença na qualidade do áudio.")
         Spacer(Modifier.height(12.dp))
-        if (api == null || storage == null) {
+        if (identity != null && identity.available && signedInEmail.isBlank()) {
+            OutlinedTextField(value = loginEmail, onValueChange = { loginEmail = it },
+                label = { Text("E-mail") }, singleLine = true)
+            OutlinedTextField(value = password, onValueChange = { password = it },
+                label = { Text("Senha") }, singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+            Row {
+                Button(onClick = {
+                    loading = true
+                    error = null
+                    scope.launch {
+                        runCatching {
+                            if (registering) identity.register(loginEmail, password)
+                            else identity.signIn(loginEmail, password)
+                        }.onSuccess {
+                            signedInEmail = identity.email().orEmpty()
+                            password = ""
+                        }.onFailure { error = it.message ?: "Erro ao entrar" }
+                        loading = false
+                    }
+                }, enabled = !loading) { Text(if (registering) "Criar conta" else "Entrar") }
+                TextButton(onClick = { registering = !registering }) {
+                    Text(if (registering) "Já tenho conta" else "Criar conta")
+                }
+            }
+            if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+        } else if (api == null || storage == null || identity == null || !identity.available) {
             Text("A conta e o servidor de compras ainda não estão configurados neste aplicativo. Nenhuma compra ou download pago pode ser realizado.", color = MaterialTheme.colorScheme.error)
         } else {
+            Text("Conta: $signedInEmail")
+            TextButton(onClick = {
+                identity.signOut()
+                signedInEmail = ""
+                ids = emptySet()
+                error = null
+            }) { Text("Sair") }
             OutlinedButton(onClick = { refresh() }, enabled = !loading) { Text("Atualizar compras") }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
