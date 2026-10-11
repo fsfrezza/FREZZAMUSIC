@@ -31,3 +31,6 @@ Forneça as propriedades Gradle `frezzamusicFirebaseApiKey`, `frezzamusicFirebas
 A autenticação Google ainda não foi integrada. Sem as propriedades, a tela permanece indisponível e não inventa uma identidade. A configuração Gradle e o fluxo Android ainda exigem validação de build e testes em dispositivos.
 
 **Importante:** registre cada pacote Android no Firebase e forneça o respectivo App ID; não copie o mesmo App ID para os três pacotes. Os valores vazios continuam desabilitando o login e os downloads comprados, sem interferir na reprodução gratuita.
+
+## Reprodução dos downloads comprados
+O `PlaybackController` agora recebe a API de compras e o armazenamento privado. Ao montar uma nova fila de reprodução, consulta os direitos atuais no backend e usa o arquivo privado local apenas para faixas que continuam autorizadas. Sem login, sem conexão com o servidor ou sem direito confirmado, mantém o streaming gratuito como alternativa. A consulta remota pode introduzir atraso na preparação da fila; otimização de cache e reprodução totalmente offline dos arquivos pagos exigem uma política explícita de licenças e revogação. A fila já preparada não é reconstruída automaticamente quando o usuário sai da conta; esse cenário precisa de proteção adicional antes de produção.
