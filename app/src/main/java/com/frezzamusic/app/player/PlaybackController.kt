@@ -12,6 +12,7 @@ import com.frezzamusic.app.data.SettingsRepository
 import com.frezzamusic.app.data.OfflineDownloadRepository
 import com.frezzamusic.app.data.PurchasedAudioStorage
 import com.frezzamusic.app.data.PurchasedDownloadsApi
+import com.frezzamusic.app.data.PurchaseIdentity
 import com.frezzamusic.app.data.StreamResolver
 import com.frezzamusic.app.data.UserLibraryRepository
 import com.frezzamusic.app.model.Track
@@ -31,10 +32,18 @@ class PlaybackController(
     private val offline = OfflineDownloadRepository(context, resolver)
     private var purchasedStorage: PurchasedAudioStorage? = null
     private var purchasesApi: PurchasedDownloadsApi? = null
+    private var purchaseIdentity: PurchaseIdentity? = null
 
-    fun configurePurchasedPlayback(api: PurchasedDownloadsApi?, storage: PurchasedAudioStorage?) {
+    fun stopForAccountChange() {
+        controller?.stop()
+        controller?.clearMediaItems()
+        onChanged?.invoke()
+    }
+
+    fun configurePurchasedPlayback(api: PurchasedDownloadsApi?, storage: PurchasedAudioStorage?, identity: PurchaseIdentity?) {
         purchasesApi = api
         purchasedStorage = storage
+        purchaseIdentity = identity
     }
     var onChanged: (() -> Unit)? = null
     private var lastRecorded: String? = null
@@ -99,9 +108,12 @@ class PlaybackController(
         scope.launch {
             val start = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
             // Revalidate rights before using paid files. Streaming remains the fallback.
+            val startingUid = purchaseIdentity?.userId()
             val purchasedIds = try { purchasesApi?.purchasedTrackIds().orEmpty() }
                 catch (_: Exception) { emptySet() }
-            val items = queue.map { toItem(it, purchasedIds) }
+            val authorizedIds = if (startingUid != null && startingUid == purchaseIdentity?.userId())
+                purchasedIds else emptySet()
+            val items = queue.map { toItem(it, authorizedIds) }
             controller?.apply {
                 setMediaItems(items, start, positionMs.coerceAtLeast(0L))
                 prepare()
