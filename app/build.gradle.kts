@@ -21,7 +21,7 @@ android {
     productFlavors {
         create("frezzamusic") {
             dimension = "project"
-            buildConfigField("String", "FIREBASE_APP_ID", "\\\"" + (providers.gradleProperty("frezzamusicFirebaseAppId").orNull ?: "") + "\\\"")
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.app"
             resValue("string", "app_name", "FREZZAMUSIC")
             buildConfigField("String", "PROJECT_MODE", "\"FREZZAMUSIC\"")
@@ -29,7 +29,7 @@ android {
         }
         create("solasias") {
             dimension = "project"
-            buildConfigField("String", "FIREBASE_APP_ID", "\\\"" + (providers.gradleProperty("solasiasFirebaseAppId").orNull ?: "") + "\\\"")
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("solasiasFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.solasias"
             resValue("string", "app_name", "Solasias")
             buildConfigField("String", "PROJECT_MODE", "\"SOLASIAS\"")
@@ -37,7 +37,7 @@ android {
         }
         create("thefrezza") {
             dimension = "project"
-            buildConfigField("String", "FIREBASE_APP_ID", "\\\"" + (providers.gradleProperty("thefrezzaFirebaseAppId").orNull ?: "") + "\\\"")
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("thefrezzaFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.thefrezza"
             resValue("string", "app_name", "theFrezza")
             buildConfigField("String", "PROJECT_MODE", "\"THEFREZZA\"")
