@@ -10,6 +10,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.frezzamusic.app.data.SettingsRepository
 import com.frezzamusic.app.data.OfflineDownloadRepository
+import com.frezzamusic.app.data.PurchasedAudioStorage
+import com.frezzamusic.app.data.PurchasedDownloadsApi
 import com.frezzamusic.app.data.StreamResolver
 import com.frezzamusic.app.data.UserLibraryRepository
 import com.frezzamusic.app.model.Track
@@ -27,6 +29,13 @@ class PlaybackController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val settings = SettingsRepository(context)
     private val offline = OfflineDownloadRepository(context, resolver)
+    private var purchasedStorage: PurchasedAudioStorage? = null
+    private var purchasesApi: PurchasedDownloadsApi? = null
+
+    fun configurePurchasedPlayback(api: PurchasedDownloadsApi?, storage: PurchasedAudioStorage?) {
+        purchasesApi = api
+        purchasedStorage = storage
+    }
     var onChanged: (() -> Unit)? = null
     private var lastRecorded: String? = null
     private var checkpointJob: Job? = null
@@ -89,7 +98,10 @@ class PlaybackController(
     fun play(track: Track, queue: List<Track>, positionMs: Long = 0L) {
         scope.launch {
             val start = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-            val items = queue.map { toItem(it) }
+            // Revalidate rights before using paid files. Streaming remains the fallback.
+            val purchasedIds = try { purchasesApi?.purchasedTrackIds().orEmpty() }
+                catch (_: Exception) { emptySet() }
+            val items = queue.map { toItem(it, purchasedIds) }
             controller?.apply {
                 setMediaItems(items, start, positionMs.coerceAtLeast(0L))
                 prepare()
@@ -127,8 +139,10 @@ class PlaybackController(
         }
     }
 
-    private suspend fun toItem(t: Track): MediaItem {
-        val u = if (t.remote) offline.localUri(t) ?: resolver.resolve(t).url else t.uri
+    private suspend fun toItem(t: Track, purchasedIds: Set<String>): MediaItem {
+        val purchasedUri = if (t.remote && t.id in purchasedIds)
+            purchasedStorage?.localFile(t.id)?.toURI()?.toString() else null
+        val u = if (t.remote) purchasedUri ?: offline.localUri(t) ?: resolver.resolve(t).url else t.uri
         return MediaItem.Builder()
             .setMediaId(t.id)
             .setUri(u)
