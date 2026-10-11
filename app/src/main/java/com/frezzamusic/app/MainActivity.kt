@@ -89,6 +89,12 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
     val settings = remember { SettingsRepository(context) }
+    val purchaseIdentity = remember { PurchaseIdentity(context) }
+    val purchasesApi = remember(purchaseIdentity) {
+        if (purchaseIdentity.available) PurchasedDownloadsApi(BuildConfig.PURCHASE_API_URL, { purchaseIdentity.idToken() })
+        else null
+    }
+    val purchasedStorage = remember(purchasesApi) { purchasesApi?.let { PurchasedAudioStorage(context, it) } }
 
     var changeCounter by remember { mutableIntStateOf(0) }
     var tab by remember { mutableStateOf(AppTab.HOME) }
@@ -181,7 +187,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
             }
             if (showMyPurchases) {
-                Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, null, null, onClose = { showMyPurchases = false }) }
+                Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, purchasesApi, purchasedStorage, onClose = { showMyPurchases = false }) }
             }
             if (showPurchase) {
                 Surface(Modifier.fillMaxSize()) { PurchaseScreen(artists, purchaseInitialTrack, purchaseInitialAlbum, onClose={showPurchase=false}) }
