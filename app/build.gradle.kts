@@ -13,6 +13,10 @@ android {
         targetSdk = 35
         versionCode = 25
         versionName = "0.22.0"
+        buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseAppId").orNull ?: "") + "\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
+        buildConfigField("String", "PURCHASE_API_URL", "\"" + (providers.gradleProperty("frezzamusicPurchaseApiUrl").orNull ?: "") + "\"")
     }
     flavorDimensions += "project"
     productFlavors {
@@ -68,4 +72,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     implementation("com.google.guava:guava:33.4.0-android")
+    implementation("com.google.firebase:firebase-auth:23.2.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.1")
 }
