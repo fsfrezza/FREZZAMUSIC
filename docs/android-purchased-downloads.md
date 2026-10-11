@@ -21,3 +21,11 @@ O repositório de áudio comprado agora desabilita redirecionamentos HTTP(S) dur
 A tela `MyPurchasesScreen` está implementada e acessível por **Mais → Minhas Compras**. Com API autenticada, consulta direitos, lista faixas do catálogo e oferece baixar/remover; sem autenticação e URL de API configuradas, mostra um aviso explícito e não oferece download. Atualmente a navegação fornece `api=null` e `storage=null` de propósito, até que o login Firebase e o endereço HTTPS real do backend sejam configurados. A interface ainda não foi conectada ao player e não realiza pagamentos.
 
 O texto da seção Mais foi corrigido para deixar claro que baixar não significa qualidade de áudio superior ao streaming.
+
+## Firebase Authentication Android — configuração por aplicativo
+
+Foi incluída a classe `PurchaseIdentity`, que inicializa o Firebase Authentication com opções explícitas e fornece tokens de identidade para a API. A tela **Minhas Compras** oferece entrar e criar conta por e-mail e senha quando o serviço está configurado. O streaming gratuito continua sem exigir login.
+
+Forneça as propriedades Gradle `frezzamusicFirebaseApiKey`, `frezzamusicFirebaseAppId`, `frezzamusicFirebaseProjectId` e `frezzamusicPurchaseApiUrl` (HTTPS). Use o **mesmo projeto Firebase** nos três aplicativos e registre os três package names no console Firebase. Cada pacote tem um Firebase App ID próprio; portanto, a configuração atual em `defaultConfig` precisa ser especializada por flavor antes de distribuir três APKs configurados. Não inclua credenciais administrativas no APK. Configure o projeto Firebase, ative autenticação por e-mail e senha, e configure o backend com o mesmo Firebase Project ID.
+
+A autenticação Google ainda não foi integrada. Sem as propriedades, a tela permanece indisponível e não inventa uma identidade. A configuração Gradle e o fluxo Android ainda exigem validação de build e testes em dispositivos.
