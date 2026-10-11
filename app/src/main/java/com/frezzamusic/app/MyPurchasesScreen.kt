@@ -24,7 +24,8 @@ fun MyPurchasesScreen(
     api: PurchasedDownloadsApi?,
     storage: PurchasedAudioStorage?,
     identity: PurchaseIdentity?,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onSignOut: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var ids by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -86,6 +87,7 @@ fun MyPurchasesScreen(
         } else {
             Text("Conta: $signedInEmail")
             TextButton(onClick = {
+                onSignOut()
                 identity.signOut()
                 signedInEmail = ""
                 ids = emptySet()
