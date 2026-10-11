@@ -94,7 +94,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         if (purchaseIdentity.available) PurchasedDownloadsApi(BuildConfig.PURCHASE_API_URL, { purchaseIdentity.idToken() })
         else null
     }
-    val purchasedStorage = remember(purchasesApi) { purchasesApi?.let { PurchasedAudioStorage(context, it) } }
+    val purchasedStorage = remember(purchasesApi) { purchasesApi?.let { PurchasedAudioStorage(context, it, purchaseIdentity) } }
     SideEffect { playback.configurePurchasedPlayback(purchasesApi, purchasedStorage) }
 
     var changeCounter by remember { mutableIntStateOf(0) }
