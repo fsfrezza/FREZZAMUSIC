@@ -34,6 +34,8 @@ class PurchaseIdentity(context: Context) {
 
     fun email(): String? = if (firebaseApp == null) null else auth().currentUser?.email
 
+    fun userId(): String? = if (firebaseApp == null) null else auth().currentUser?.uid
+
     suspend fun signIn(email: String, password: String) {
         require(email.isNotBlank() && password.isNotBlank()) { "Informe e-mail e senha" }
         auth().signInWithEmailAndPassword(email.trim(), password).await()
