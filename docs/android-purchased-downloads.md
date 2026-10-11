@@ -16,3 +16,8 @@ O módulo `PurchasedAudioStorage` consulta os direitos no servidor, solicita URL
 
 ## Limites de transferência
 O repositório de áudio comprado agora desabilita redirecionamentos HTTP(S) durante a transferência e impõe limite de 200 MB por arquivo, inclusive quando o servidor não informa Content-Length. Respostas incompletas ou acima do limite não são marcadas como baixadas. Antes da publicação, revisar limites conforme tamanho real do catálogo e incluir testes instrumentados de rede.
+
+## Interface Minhas Compras
+A tela `MyPurchasesScreen` está implementada e acessível por **Mais → Minhas Compras**. Com API autenticada, consulta direitos, lista faixas do catálogo e oferece baixar/remover; sem autenticação e URL de API configuradas, mostra um aviso explícito e não oferece download. Atualmente a navegação fornece `api=null` e `storage=null` de propósito, até que o login Firebase e o endereço HTTPS real do backend sejam configurados. A interface ainda não foi conectada ao player e não realiza pagamentos.
+
+O texto da seção Mais foi corrigido para deixar claro que baixar não significa qualidade de áudio superior ao streaming.
