@@ -103,6 +103,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var purchaseInitialTrack by remember { mutableStateOf<Track?>(null) }
     var purchaseInitialAlbum by remember { mutableStateOf<Album?>(null) }
     var showPurchase by remember { mutableStateOf(false) }
+    var showMyPurchases by remember { mutableStateOf(false) }
     val onboardingPrefs=remember{context.getSharedPreferences("onboarding",android.content.Context.MODE_PRIVATE)}
     var showMediaPrompt by remember{mutableStateOf(!onboardingPrefs.getBoolean("media_prompt_done",false))}
     var deviceScan by remember{mutableStateOf(onboardingPrefs.getBoolean("scan_device",false))}
@@ -177,7 +178,10 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback)
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
+            }
+            if (showMyPurchases) {
+                Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, null, null, onClose = { showMyPurchases = false }) }
             }
             if (showPurchase) {
                 Surface(Modifier.fillMaxSize()) { PurchaseScreen(artists, purchaseInitialTrack, purchaseInitialAlbum, onClose={showPurchase=false}) }
@@ -435,7 +439,7 @@ private fun NewsScreen() {
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit) {
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -474,8 +478,9 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
             Slider(value=crossfade.toFloat(),onValueChange={crossfade=it.toInt()},onValueChangeFinished={settings.crossfadeSeconds=crossfade},valueRange=0f..12f,steps=11,modifier=Modifier.padding(horizontal=16.dp))
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             Text("Offline e streaming", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = onMyPurchases) { Text("Minhas Compras") }
             ListItem(headlineContent = { Text("Downloads offline") }, supportingContent = { Text("$downloadedCount faixas • $storageLabel usados") }, leadingContent = { Icon(Icons.Default.Download, null) }, trailingContent = { if (downloadedCount > 0) TextButton(onClick = { confirmClear = true }) { Text("Limpar") } })
-            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é livre para ouvir. Downloads em alta qualidade serão liberados por contribuição/licença.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
+            ListItem(headlineContent = { Text("Streaming e downloads") }, supportingContent = { Text("O catálogo oficial é gratuito para ouvir. A compra permite baixar, com a mesma qualidade do streaming.") }, leadingContent = { Icon(Icons.Default.Cloud, null) })
             ListItem(headlineContent = { Text("Versão instalada") }, supportingContent = { Text("${BuildConfig.VERSION_NAME} • build ${BuildConfig.VERSION_CODE}") }, leadingContent = { Icon(Icons.Default.Info, null) })
         }
     }
