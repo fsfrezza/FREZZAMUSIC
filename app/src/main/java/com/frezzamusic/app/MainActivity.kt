@@ -35,6 +35,7 @@ import com.frezzamusic.app.data.*
 import com.frezzamusic.app.model.*
 import com.frezzamusic.app.player.PlaybackController
 import com.frezzamusic.app.ui.FullPlayer
+import com.frezzamusic.app.ui.MetadataConflictReview
 import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -85,6 +86,10 @@ enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
+    val metadata = remember { MetadataConflictRepository(context) }
+    var showConflictReview by remember { mutableStateOf(false) }
+    var showConflictNotice by remember { mutableStateOf(false) }
+    var metadataRevision by remember { mutableIntStateOf(0) }
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
@@ -131,6 +136,10 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
                 else -> catalog.filter { it.name.equals(BuildConfig.ARTIST_FILTER, ignoreCase = true) }
             }
         }
+        (localTracks + artists.flatMap { it.albums }.flatMap { it.tracks }).forEach { track ->
+            metadata.reconcile("track:" + track.id, mapOf("title" to track.title, "artist" to track.artist, "album" to track.album, "genre" to track.genre, "trackNumber" to track.trackNumber?.toString()))
+        }
+        if (metadata.pending().isNotEmpty()) showConflictNotice = true
         loading = false
     }
 
@@ -139,8 +148,16 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         if (changeCounter > 0) refreshLibrary()
     }
 
-    val remoteTracks = artists.flatMap { it.albums }.flatMap { it.tracks }
-    val allTracks = localTracks + remoteTracks
+    fun edited(track: Track): Track = track.copy(
+        title = metadata.effectiveValue("track:" + track.id, "title", track.title) ?: track.title,
+        artist = metadata.effectiveValue("track:" + track.id, "artist", track.artist) ?: track.artist,
+        album = metadata.effectiveValue("track:" + track.id, "album", track.album) ?: track.album,
+        genre = metadata.effectiveValue("track:" + track.id, "genre", track.genre),
+        trackNumber = metadata.effectiveValue("track:" + track.id, "trackNumber", track.trackNumber?.toString())?.toIntOrNull())
+    val visibleLocalTracks = remember(localTracks, metadataRevision) { localTracks.map(::edited) }
+    val visibleArtists = remember(artists, metadataRevision) { artists.map { artist -> artist.copy(albums = artist.albums.map { album -> album.copy(tracks = album.tracks.map(::edited)) }) } }
+    val remoteTracks = visibleArtists.flatMap { it.albums }.flatMap { it.tracks }
+    val allTracks = visibleLocalTracks + remoteTracks
     val controller = playback.controller
     val currentTrack = allTracks.find { it.id == controller?.currentMediaItem?.mediaId }
 
@@ -180,13 +197,25 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
-                AppTab.HOME -> HomeScreen(localTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(localTracks, query, { query = it }, { playback.play(it, localTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage)
-                AppTab.ONLINE -> OnlineScreen(artists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
+                AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
+                AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage)
+                AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
             }
+            if (showConflictReview) {
+                Surface(Modifier.fillMaxSize()) {
+                    MetadataConflictReview(metadata, onClose = { showConflictReview = false }, onApplied = { metadataRevision++ })
+                }
+            }
+            if (showConflictNotice && !showConflictReview) AlertDialog(
+                onDismissRequest = { showConflictNotice = false },
+                title = { Text("Alterações encontradas") },
+                text = { Text("Existem "+metadata.pending().size+" divergências entre suas edições e as fontes. Suas edições foram preservadas.") },
+                confirmButton = { Button(onClick = { showConflictNotice = false; showConflictReview = true }) { Text("Ver alterações") } },
+                dismissButton = { TextButton(onClick = { showConflictNotice = false }) { Text("Depois") } }
+            )
             if (showMyPurchases) {
                 Surface(Modifier.fillMaxSize()) { MyPurchasesScreen(remoteTracks, purchasesApi, purchasedStorage, purchaseIdentity, onClose = { showMyPurchases = false }, onSignOut = { playback.stopForAccountChange() }) }
             }
