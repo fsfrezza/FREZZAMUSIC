@@ -407,7 +407,7 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
           val folders=tracks.filter{query.isBlank()||it.folder.orEmpty().contains(query,true)||it.title.contains(query,true)}.groupBy{it.folder?.takeIf{s->s.isNotBlank()}?:"Sem pasta identificada"}.toSortedMap(String.CASE_INSENSITIVE_ORDER)
           folders.forEach{(folder,folderTracks)->
             item(key="folder-header-"+folder){ListItem(headlineContent={Text(folder,fontWeight=FontWeight.Bold)},supportingContent={Text("${folderTracks.size} faixas")},leadingContent={Icon(Icons.Default.Folder,null)})}
-            items(folderTracks,key={"folder-"+folder+"-"+it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)}){user.toggleFavorite(t.id)}}
+            items(folderTracks,key={"folder-"+folder+"-"+it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)},{user.toggleFavorite(t.id)},onEdit)}
           }
         }
       }}
