@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.22.1"
+        versionCode = 27
+        versionName = "0.22.2"
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
         buildConfigField("String", "PURCHASE_API_URL", "\"" + (providers.gradleProperty("frezzamusicPurchaseApiUrl").orNull ?: "") + "\"")
