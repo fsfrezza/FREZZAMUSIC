@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
+enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
 
 @Composable
 fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
@@ -222,7 +222,6 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                         AppTab.LIBRARY to Icons.Default.LibraryMusic,
                         AppTab.ONLINE to Icons.Default.Cloud,
                         AppTab.PLAYLISTS to Icons.Default.PlaylistPlay,
-                        AppTab.NEWS to Icons.Default.Newspaper,
                         AppTab.MORE to Icons.Default.MoreHoriz
                     )
                     tabs.forEach { (item, icon) ->
@@ -230,7 +229,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                             selected = tab == item,
                             onClick = { tab = item; selectedAlbum = null; playerExpanded = false },
                             icon = { Icon(icon, contentDescription = null) },
-                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> "Externas"; AppTab.PLAYLISTS -> "Listas"; AppTab.NEWS -> "Novidades"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> BuildConfig.ARTIST_FILTER.ifBlank { "Externas" }; AppTab.PLAYLISTS -> "Listas"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -243,7 +242,6 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                 AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
                 AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
-                AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading, catalogStatus = catalogStatus)
             }
             editingTrack?.let { track ->
@@ -433,7 +431,7 @@ private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> 
    IconButton(onClick=refresh, enabled=!refreshing) { Icon(Icons.Default.Refresh, "Atualizar catálogo online") }
   }
 
-  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text("Buscar mídias externas")},leadingIcon={Icon(Icons.Default.Search,null)})
+  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text(if (BuildConfig.ARTIST_FILTER.isBlank()) "Buscar mídias externas" else "Buscar em ${BuildConfig.ARTIST_FILTER}")},leadingIcon={Icon(Icons.Default.Search,null)})
   if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todos os artistas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todos os artistas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
   val modes=listOf("Músicas","Artistas","Álbuns");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
   val ft=tracks.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||listOf(it.title,it.artist,it.album).any{s->s.contains(query,true)}}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Álbum"->compareBy(String.CASE_INSENSITIVE_ORDER){it.album};"Data"->compareBy<Track>{it.dateMs?:0L};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()}
@@ -494,49 +492,6 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
                 ListItem(headlineContent={Text(q.name)},supportingContent={Text("${tracks.size} faixas")},leadingContent={Icon(Icons.Default.QueueMusic,null)},
                     trailingContent={IconButton(onClick={user.deleteQueue(q.id);revision++}){Icon(Icons.Default.Delete,null)}},
                     modifier=Modifier.clickable{tracks.firstOrNull()?.let{playback.play(it,tracks)}})
-            }
-        }
-    }
-}
-
-@Composable
-private fun NewsScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val identity = remember { ProjectIdentities.forMode(BuildConfig.PROJECT_MODE) }
-    val repository = remember { ReleaseRepository() }
-    var news by remember { mutableStateOf(repository.announcements(BuildConfig.PROJECT_MODE)) }
-    var refreshing by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        news = repository.liveAnnouncements(BuildConfig.PROJECT_MODE)
-        refreshing = false
-    }
-    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Text(identity.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-            Text(identity.subtitle, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Text(identity.about, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
-            identity.editorialUrl?.let { url ->
-                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) {
-                    Icon(Icons.Default.Article, null); Spacer(Modifier.width(8.dp)); Text("Conteúdo editorial")
-                }
-            }
-            Text("Novidades e lançamentos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
-            if(refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
-        }
-        items(news, key = { it.id }) { item ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (item.type == NewsType.BLOG_POST) Icons.Default.Article else Icons.Default.Campaign, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Text(item.artist + (item.releaseDate?.let { " • $it" } ?: ""), style = MaterialTheme.typography.labelMedium)
-                    Text(item.message, modifier = Modifier.padding(top = 8.dp))
-                    item.externalUrl?.let { url ->
-                        TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("Abrir") }
-                    }
-                }
             }
         }
     }
