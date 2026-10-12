@@ -51,6 +51,14 @@ class MainActivity : ComponentActivity() {
     private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { mediaPermissionResult?.invoke(it) }
     private val visualizerPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { visualizerPermissionResult?.invoke(it) }
     private var folderAdded: (() -> Unit)? = null
+    private var writeGrantCallback: ((Boolean) -> Unit)? = null
+    private val writePermission by lazy { MusicWritePermission(this) }
+    private val writePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        val granted = result.resultCode == RESULT_OK && uri != null && writePermission.rememberGrant(uri, result.data?.flags ?: 0)
+        writeGrantCallback?.invoke(granted)
+        writeGrantCallback = null
+    }
     private var artistImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { try { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_:Exception){}; artistImagePicked?.invoke(it) } }
 
@@ -72,6 +80,20 @@ class MainActivity : ComponentActivity() {
             FrezzaTheme {
                 FrezzaMusicApp(
                     repo = folders,
+                    requestFolderWrite = { track, callback ->
+                        val target = Uri.parse(track.uri)
+                        val matching = folders.folders().firstOrNull { tree ->
+                            writePermission.writableFileInTree(tree, target) != null
+                        }
+                        if (matching != null) callback(true)
+                        else {
+                            writeGrantCallback = callback
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            }
+                            writePicker.launch(intent)
+                        }
+                    },
                     pickFolder = { callback -> folderAdded = callback; picker.launch(null) },
                     pickArtistImage = { callback -> artistImagePicked = callback; imagePicker.launch(arrayOf("image/*")) },
                     requestMediaAccess = { callback -> mediaPermissionResult=callback; mediaPermission.launch(if(Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) },
@@ -85,7 +107,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Boolean) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val metadata = remember { MetadataConflictRepository(context) }
@@ -93,6 +115,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var showConflictNotice by remember { mutableStateOf(false) }
     var metadataRevision by remember { mutableIntStateOf(0) }
     var editingTrack by remember { mutableStateOf<Track?>(null) }
+    var writePermissionDenied by remember { mutableStateOf(false) }
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
@@ -209,11 +232,15 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
             }
             editingTrack?.let { track ->
                 TrackMetadataEditor(track, onDismiss = { editingTrack = null }, onSave = { changes ->
-                    changes.forEach { (field, value) -> metadata.saveEdit("track:" + track.id, field, value) }
-                    metadataRevision++
-                    editingTrack = null
+                    requestFolderWrite(track) { granted ->
+                        if (granted) {
+                            // A grant is not a completed file write. Keep the editor open until a tag writer is wired.
+                            writePermissionDenied = true
+                        } else writePermissionDenied = true
+                    }
                 })
             }
+            if (writePermissionDenied) AlertDialog(onDismissRequest = { writePermissionDenied = false }, title = { Text("Edição não concluída") }, text = { Text("As tags do arquivo ainda não foram gravadas. Nenhuma alteração foi aplicada. Verifique a autorização de escrita e tente novamente após a integração do gravador de tags.") }, confirmButton = { TextButton(onClick = { writePermissionDenied = false }) { Text("Entendi") } })
             if (showConflictReview) {
                 Surface(Modifier.fillMaxSize()) {
                     MetadataConflictReview(metadata, onClose = { showConflictReview = false }, onApplied = { metadataRevision++ })
