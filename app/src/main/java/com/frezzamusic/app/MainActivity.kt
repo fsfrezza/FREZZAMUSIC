@@ -143,6 +143,8 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    val liveCatalog = remember { LiveDriveCatalog(context) }
+    var catalogStatus by remember { mutableStateOf(liveCatalog.status()) }
     var playerExpanded by remember { mutableStateOf(false) }
     var fullPlayerPage by remember { mutableIntStateOf(0) }
     var purchaseInitialTrack by remember { mutableStateOf<Track?>(null) }
@@ -159,27 +161,34 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
         onDispose { playback.release() }
     }
 
-    suspend fun refreshLibrary() {
+    suspend fun refreshLibrary(online: Boolean = false) {
+        if (loading) return
         loading = true
-        roots = repo.folders()
-        localTracks = withContext(Dispatchers.IO) { val manual=repo.scan(); val device=if(deviceScan) repo.scanDevice() else emptyList(); repo.mergeWithoutDuplicates(manual,device) }
-        artists = FrezzaDriveCatalog().artists().let { catalog ->
-            when (BuildConfig.ARTIST_FILTER) {
-                "" -> catalog
-                else -> catalog.filter { it.name.equals(BuildConfig.ARTIST_FILTER, ignoreCase = true) }
+        try {
+            artists = liveCatalog.cached(BuildConfig.ARTIST_FILTER)
+            roots = repo.folders()
+            localTracks = withContext(Dispatchers.IO) { val manual=repo.scan(); val device=if(deviceScan) repo.scanDevice() else emptyList(); repo.mergeWithoutDuplicates(manual,device) }
+            if (online) {
+                catalogStatus = "Atualizando catálogo online…"
+                val update = liveCatalog.refresh(BuildConfig.ARTIST_FILTER)
+                artists = update.artists
+                catalogStatus = update.message
+                selectedAlbum = selectedAlbum?.let { selected -> artists.flatMap { it.albums }.find { it.id == selected.id } }
             }
-        }
-        (localTracks + artists.flatMap { it.albums }.flatMap { it.tracks }).forEach { track ->
-            metadata.reconcile("track:" + track.id, mapOf("title" to track.title, "artist" to track.artist, "album" to track.album, "genre" to track.genre, "trackNumber" to track.trackNumber?.toString()))
-        }
-        if (metadata.pending().isNotEmpty()) showConflictNotice = true
-        loading = false
+            (localTracks + artists.flatMap { it.albums }.flatMap { it.tracks }).forEach { track ->
+                metadata.reconcile("track:" + track.id, mapOf("title" to track.title, "artist" to track.artist, "album" to track.album, "genre" to track.genre, "trackNumber" to track.trackNumber?.toString()))
+            }
+            if (metadata.pending().isNotEmpty()) showConflictNotice = true
+        } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (_: Exception) { catalogStatus = "A atualização não foi concluída. Tente novamente." }
+        finally { loading = false }
     }
 
-    LaunchedEffect(Unit) { refreshLibrary() }
+    LaunchedEffect(Unit) { refreshLibrary(online = true) }
     LaunchedEffect(changeCounter) {
         if (changeCounter > 0) refreshLibrary()
     }
+    val refreshAll: () -> Unit = { editScope.launch { refreshLibrary(online = true) }; Unit }
 
     fun edited(track: Track): Track = track.copy(
         title = metadata.effectiveValue("track:" + track.id, "title", track.title) ?: track.title,
@@ -232,10 +241,10 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
             when (tab) {
                 AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
-                AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
+                AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading, catalogStatus = catalogStatus)
             }
             editingTrack?.let { track ->
                 TrackMetadataEditor(track, onDismiss = { editingTrack = null }, onSave = { changes ->
@@ -414,11 +423,16 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
     }
 }
 @Composable
-private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository, downloads: OfflineDownloadRepository, buy: (Track?, Album?) -> Unit) {
+private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository, downloads: OfflineDownloadRepository, buy: (Track?, Album?) -> Unit, refresh: () -> Unit, refreshing: Boolean, catalogStatus: String) {
  val allAlbums=artists.flatMap{it.albums}; val tracks=allAlbums.flatMap{it.tracks}; var mode by remember{mutableStateOf("Álbuns")};var query by remember{mutableStateOf("")};var artistFilter by remember{mutableStateOf("Todas")};var artistMenu by remember{mutableStateOf(false)};var sort by remember{mutableStateOf("Título")};var ascending by remember{mutableStateOf(true)};var sortMenu by remember{mutableStateOf(false)}
  val artistOptions=listOf("Todas")+artists.map{it.name}.sorted()
  if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,user.favorites().contains(t.id),{play(t,album)},{user.toggleFavorite(t.id)},downloads,{buy(t,album)})}}
  else Column{
+  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
+   Text(catalogStatus, Modifier.weight(1f), style=MaterialTheme.typography.bodySmall)
+   IconButton(onClick=refresh, enabled=!refreshing) { Icon(Icons.Default.Refresh, "Atualizar catálogo online") }
+  }
+
   OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text("Buscar mídias externas")},leadingIcon={Icon(Icons.Default.Search,null)})
   if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todos os artistas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todos os artistas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
   val modes=listOf("Músicas","Artistas","Álbuns");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
@@ -529,7 +543,7 @@ private fun NewsScreen() {
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String) {
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -542,12 +556,13 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
         item {
             Text("Configurações", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
-            Text("Biblioteca local", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("Pastas usadas para localizar músicas armazenadas neste aparelho.", style = MaterialTheme.typography.bodySmall)
+            Text("Biblioteca local e catálogo online", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Atualize as músicas do aparelho e os álbuns de Solasias e theFrezza no Drive.", style = MaterialTheme.typography.bodySmall)
+            Text(catalogStatus, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = add) { Text("Adicionar pasta") }
-                OutlinedButton(onClick = refresh) { Icon(Icons.Default.Refresh, null); Text(" Atualizar biblioteca") }
+                OutlinedButton(onClick = refresh, enabled = !refreshing) { Icon(Icons.Default.Refresh, null); Text(if (refreshing) " Atualizando…" else " Atualizar biblioteca") }
             }
         }
         items(folders, key = { it.toString() }) { uri ->

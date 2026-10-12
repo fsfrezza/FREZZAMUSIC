@@ -9,13 +9,16 @@ internal fun album(artist:String,r:RawAlbum):Album {
  val cover=r.coverId?.let{"https://drive.google.com/thumbnail?id=$it&sz=w1200"}
  val genre=if(artist.equals("Solasias",true)) "Metal Cristão" else if(artist.equals("theFrezza",true)) "Metal" else null
  return Album(r.id,r.title,artist,cover,r.tracks.mapIndexed{i,(fid,name)->
-  Track("remote:$artist:${r.id}:$fid",name.substringAfter(" - ").substringAfter(". ").removeSuffix(".mp3"),artist,r.title,"",artwork=cover,source=TrackSource.FREZZAMUSIC_STREAM,trackNumber=i+1,remoteFileId=fid,genre=genre,canDownload=false,downloadPriceBrl=1.99)
+  Track("remote:$artist:${r.id}:$fid",DriveFolderParser.displayTitle(name).replace(Regex("(?i)\\.mp3$"), ""),artist,r.title,"",artwork=cover,source=TrackSource.FREZZAMUSIC_STREAM,trackNumber=i+1,remoteFileId=fid,genre=genre,canDownload=false,downloadPriceBrl=1.99)
  })
 }
 
 /** Catálogo real inicial extraído das pastas fornecidas pelo proprietário. Novos discos podem ser acrescentados sem alterar o player. */
 class FrezzaDriveCatalog:RemoteCatalog {
- override suspend fun artists():List<Artist> {
+ override suspend fun artists():List<Artist> = rawArtists().map { (name, albums) ->
+  Artist(name.lowercase(), name, albums.map { album(name, it) }, virtualProject=true, description="Projeto musical virtual")
+ }
+ internal fun rawArtists():Map<String,List<RawAlbum>> {
   val frezza=listOf(
    RawAlbum("frezza","Frezza","1xL2kza5-2I7cYn8z8FAnZsH0rkjgFckU","15rtsXVkX044aDWPlPwf0oQcacXV5Gvf3",listOf(
     "1pRyjLH9umdmC4oZHpOoIMS0IpWX-mrVy" to "01 - Arrow Of Hope.mp3","1_QMolAkecxNVbdTcWsLSxTb9UcMJCtQ_" to "02 - Dead Guy (They Called Him Dead).mp3","1wVgzv7MBa6X7WOCaBgjy97rXvztGg7mj" to "03 - Survivor.mp3","12QEyqUBy8uz8OkhPkBAa0llkdmKboNcp" to "04 - The Thompsons.mp3","1RemCrEdDJgBC-G73l4P1i7Gqk_dWI0o3" to "05 - Freezer.mp3","1U8_kvPf0r_iCqHIgNX1YB6EfdJi8RjQx" to "06 - A Symphony For The Contrasts' Land.mp3","1AKvuwAjQgRfHSLeTFObkcGJzjqjVHoVV" to "07 - Northern Fire.mp3","1m1MVTc_q3sMKowrPfAOyxIbaFI82aodk" to "08 - Coffee in the Bottle.mp3","1Mf8o5jf4ye0eavqTkoQ1-kB6XP_7YZH5" to "09 - The Phantoms Of Gluttony.mp3","1ye4-iNasRmTlr9vwovuFIsCP1VtFI4T6" to "10 - The Ancient Tree.mp3","180gjMIYe2nKC8jdF8yAHYUh4xfDwYsUb" to "11 - Três, Três, Quatro. Vai!.mp3","1-4a9Ws1OvERXx6B_pvIXdDvzSlsOqUkV" to "12 - Frezza (english version).mp3","1_1eHorj9QdfkW-y918E2qfqr9ftv9ue-" to "13 - Frezza (Bônus - versão brasileira).mp3","1c_38g3pNU17fXbB4JBzcZA-CaEoi1eJP" to "14 - Frezza (Bônus - versão latim).mp3")),
@@ -28,6 +31,6 @@ class FrezzaDriveCatalog:RemoteCatalog {
   )
   val allFrezza = frezza + CatalogExpansion.theFrezza()
   val allSolasias = solasias + CatalogExpansion.solasias()
-  return listOf(Artist("thefrezza","theFrezza",allFrezza.map{album("theFrezza",it)}, virtualProject=true, description="Projeto musical virtual"),Artist("solasias","Solasias",allSolasias.map{album("Solasias",it)}, virtualProject=true, description="Projeto musical virtual"))
+  return linkedMapOf("theFrezza" to allFrezza, "Solasias" to allSolasias)
  }
 }

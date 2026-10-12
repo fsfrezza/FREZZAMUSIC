@@ -15,7 +15,7 @@ Projeto Android nativo em Kotlin + Jetpack Compose + Android Media3.
 - estrutura de configurações para tema, velocidade e crossfade.
 
 ## Catálogo remoto
-A árvore contém os IDs reais já catalogados do Drive para desenvolvimento. O catálogo continua sendo ampliável em `RemoteCatalog.kt`. Google Drive compartilhado não é a solução de proteção para HQ comercial.
+A árvore contém os IDs reais já catalogados do Drive para desenvolvimento. O catálogo online agora consulta as pastas públicas do Drive ao iniciar e ao atualizar a biblioteca; os metadados ficam em cache. Consulte `docs/live-drive-catalog.md` para o funcionamento e os limites. Google Drive compartilhado não é a solução de proteção para HQ comercial.
 
 ## Importante
 Este ambiente não contém Android SDK/Gradle operacional e, portanto, esta versão não foi compilada aqui. Abra no Android Studio, sincronize o Gradle e compile. Erros de API/versão que apareçam na primeira compilação devem ser corrigidos com base no log real do Android Studio.
