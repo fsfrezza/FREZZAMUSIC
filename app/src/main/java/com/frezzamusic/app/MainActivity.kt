@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
 import android.os.Build
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -90,6 +92,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     var showConflictReview by remember { mutableStateOf(false) }
     var showConflictNotice by remember { mutableStateOf(false) }
     var metadataRevision by remember { mutableIntStateOf(0) }
+    var editingTrack by remember { mutableStateOf<Track?>(null) }
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
@@ -198,11 +201,18 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
                 AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage)
+                AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
                 AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true })
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.NEWS -> NewsScreen()
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, { changeCounter++; loading=true }, downloads, settings, playback, onMyPurchases = { showMyPurchases = true })
+            }
+            editingTrack?.let { track ->
+                TrackMetadataEditor(track, onDismiss = { editingTrack = null }, onSave = { changes ->
+                    changes.forEach { (field, value) -> metadata.saveEdit("track:" + track.id, field, value) }
+                    metadataRevision++
+                    editingTrack = null
+                })
             }
             if (showConflictReview) {
                 Surface(Modifier.fillMaxSize()) {
@@ -333,7 +343,7 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
 }
 
 @Composable
-private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository, pickArtistImage: (((Uri) -> Unit)) -> Unit) {
+private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository, pickArtistImage: (((Uri) -> Unit)) -> Unit, onEdit: (Track) -> Unit) {
     val modes=listOf("Músicas","Artistas","Álbuns","Pastas")
     var mode by remember{mutableStateOf("Músicas")}; var sort by remember{mutableStateOf("Título")}; var ascending by remember{mutableStateOf(true)}; var artistFilter by remember{mutableStateOf("Todas")}; var artistMenu by remember{mutableStateOf(false)}; var sortMenu by remember{mutableStateOf(false)}
     val artistOptions=listOf("Todas")+tracks.map{it.artist}.distinct().sorted()
@@ -346,7 +356,7 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
       }
       ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
       LazyColumn{when(mode){
-        "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)}){user.toggleFavorite(t.id)}}
+        "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)},{user.toggleFavorite(t.id)},onEdit)}
         "Artistas"->items(tracks.filter{query.isBlank()||it.artist.contains(query,true)}.groupBy{it.artist}.toList(),key={it.first}){(n,l)->val custom=user.artistImage(n);ElevatedCard(Modifier.padding(8.dp).fillMaxWidth().clickable{artistFilter=n;mode="Músicas"}){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){Card(Modifier.size(92.dp)){if(custom!=null)AsyncImage(custom,n,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(50.dp))}};Column(Modifier.weight(1f).padding(start=12.dp)){Text(n,fontWeight=FontWeight.Bold);Text("${l.size} faixas");TextButton(onClick={pickArtistImage{uri->user.setArtistImage(n,uri.toString())}}){Icon(Icons.Default.Image,null);Text(" Escolher logo")};if(custom!=null)TextButton(onClick={user.clearArtistImage(n)}){Text("Remover imagem")}}}}}
         "Álbuns"->items(filtered.groupBy{it.artist+" / "+it.album}.values.toList().let{groups->when(sort){"Artista"->groups.sortedBy{it.first().artist.lowercase()};"Data"->groups.sortedBy{it.maxOfOrNull{x->x.dateMs?:0L}?:0L};else->groups.sortedBy{it.first().album.lowercase()}}.let{if(ascending)it else it.reversed()}},key={it.first().artist+"/"+it.first().album}){l->val f=l.first();ListItem(headlineContent={Text(f.album,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(f.artist+" • "+l.size+" faixas")},leadingContent={if(!f.artwork.isNullOrBlank())AsyncImage(f.artwork,null,Modifier.size(56.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},modifier=Modifier.clickable{play(f)})}
         else->{
@@ -550,14 +560,36 @@ private fun OnlineTrackRow(track: Track, favorite: Boolean, play: () -> Unit, to
 }
 
 @Composable
-private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFavorite: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun TrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFavorite: () -> Unit, onEdit: (Track) -> Unit) {
     ListItem(
         headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = { Text("${track.artist} • ${track.album} • ${if (track.remote) "Online" else "Local"}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingContent = { if (!track.artwork.isNullOrBlank()) AsyncImage(model=track.artwork,contentDescription=null,modifier=Modifier.size(48.dp),contentScale=ContentScale.Crop) else Icon(if (track.remote) Icons.Default.Cloud else Icons.Default.MusicNote, null) },
         trailingContent = { IconButton(onClick = toggleFavorite) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null) } },
-        modifier = Modifier.clickable(onClick = play)
+        modifier = Modifier.combinedClickable(onClick = play, onLongClick = { onEdit(track) })
     )
+}
+
+@Composable
+private fun TrackMetadataEditor(track: Track, onDismiss: () -> Unit, onSave: (Map<String,String>) -> Unit) {
+    var title by remember(track.id) { mutableStateOf(track.title) }
+    var artist by remember(track.id) { mutableStateOf(track.artist) }
+    var album by remember(track.id) { mutableStateOf(track.album) }
+    var genre by remember(track.id) { mutableStateOf(track.genre.orEmpty()) }
+    var number by remember(track.id) { mutableStateOf(track.trackNumber?.toString().orEmpty()) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Editar música") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(title, { title = it }, label = { Text("Título") }, singleLine = true)
+            OutlinedTextField(artist, { artist = it }, label = { Text("Artista") }, singleLine = true)
+            OutlinedTextField(album, { album = it }, label = { Text("Álbum") }, singleLine = true)
+            OutlinedTextField(genre, { genre = it }, label = { Text("Gênero") }, singleLine = true)
+            OutlinedTextField(number, { number = it.filter(Char::isDigit) }, label = { Text("Número da faixa") }, singleLine = true)
+        }
+    }, confirmButton = { Button(onClick = {
+        onSave(mapOf("title" to title, "artist" to artist, "album" to album, "genre" to genre, "trackNumber" to number))
+    }, enabled = title.isNotBlank() && artist.isNotBlank()) { Text("Salvar") } },
+    dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }
 
 @Composable
