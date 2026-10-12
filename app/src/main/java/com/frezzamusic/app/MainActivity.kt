@@ -51,12 +51,16 @@ class MainActivity : ComponentActivity() {
     private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { mediaPermissionResult?.invoke(it) }
     private val visualizerPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { visualizerPermissionResult?.invoke(it) }
     private var folderAdded: (() -> Unit)? = null
-    private var writeGrantCallback: ((Boolean) -> Unit)? = null
+    private var writeGrantCallback: ((Uri?) -> Unit)? = null
+    private var writeTarget: Uri? = null
     private val writePermission by lazy { MusicWritePermission(this) }
     private val writePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         val granted = result.resultCode == RESULT_OK && uri != null && writePermission.rememberGrant(uri, result.data?.flags ?: 0)
-        writeGrantCallback?.invoke(granted)
+        val target = writeTarget
+        val writable = if (granted && uri != null && target != null) writePermission.writableFileInTree(uri, target)?.uri else null
+        writeGrantCallback?.invoke(writable)
+        writeTarget = null
         writeGrantCallback = null
     }
     private var artistImagePicked: ((Uri) -> Unit)? = null
@@ -85,9 +89,10 @@ class MainActivity : ComponentActivity() {
                         val matching = folders.folders().firstOrNull { tree ->
                             writePermission.writableFileInTree(tree, target) != null
                         }
-                        if (matching != null) callback(true)
+                        if (matching != null) callback(writePermission.writableFileInTree(matching, target)?.uri)
                         else {
                             writeGrantCallback = callback
+                            writeTarget = target
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                             }
@@ -107,7 +112,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, NEWS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Boolean) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val metadata = remember { MetadataConflictRepository(context) }
@@ -115,7 +120,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Boo
     var showConflictNotice by remember { mutableStateOf(false) }
     var metadataRevision by remember { mutableIntStateOf(0) }
     var editingTrack by remember { mutableStateOf<Track?>(null) }
-    var writePermissionDenied by remember { mutableStateOf(false) }
+    var writeError by remember { mutableStateOf<String?>(null) }
+    val tagWriter = remember { LocalMp3TagWriter(context) }
+    val editScope = rememberCoroutineScope()
     val streamResolver = remember { DevelopmentDriveStreamResolver() }
     val playback = remember { PlaybackController(context, streamResolver, user) }
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
@@ -232,15 +239,25 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Boo
             }
             editingTrack?.let { track ->
                 TrackMetadataEditor(track, onDismiss = { editingTrack = null }, onSave = { changes ->
-                    requestFolderWrite(track) { granted ->
-                        if (granted) {
-                            // A grant is not a completed file write. Keep the editor open until a tag writer is wired.
-                            writePermissionDenied = true
-                        } else writePermissionDenied = true
+                    if (track.remote) {
+                        changes.forEach { (field, value) -> metadata.saveEdit("track:" + track.id, field, value) }
+                        metadataRevision++
+                        editingTrack = null
+                    } else requestFolderWrite(track) { writableUri ->
+                        if (writableUri == null) writeError = "A pasta selecionada não corresponde ao arquivo ou a autorização foi negada. Selecione a pasta correta na próxima tentativa."
+                        else editScope.launch {
+                            try {
+                                withContext(Dispatchers.IO) { tagWriter.save(writableUri, changes) }
+                                editingTrack = null
+                                changeCounter++
+                            } catch (error: Exception) {
+                                writeError = error.message ?: "Não foi possível gravar as tags."
+                            }
+                        }
                     }
                 })
             }
-            if (writePermissionDenied) AlertDialog(onDismissRequest = { writePermissionDenied = false }, title = { Text("Edição não concluída") }, text = { Text("As tags do arquivo ainda não foram gravadas. Nenhuma alteração foi aplicada. Verifique a autorização de escrita e tente novamente após a integração do gravador de tags.") }, confirmButton = { TextButton(onClick = { writePermissionDenied = false }) { Text("Entendi") } })
+            if (writeError != null) AlertDialog(onDismissRequest = { writeError = null }, title = { Text("Edição não concluída") }, text = { Text(writeError.orEmpty()) }, confirmButton = { TextButton(onClick = { writeError = null }) { Text("Entendi") } })
             if (showConflictReview) {
                 Surface(Modifier.fillMaxSize()) {
                     MetadataConflictReview(metadata, onClose = { showConflictReview = false }, onApplied = { metadataRevision++ })
