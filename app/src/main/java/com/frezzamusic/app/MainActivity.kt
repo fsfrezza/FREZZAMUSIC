@@ -42,6 +42,7 @@ import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -131,6 +132,12 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     val downloads = remember { OfflineDownloadRepository(context, streamResolver) }
     val settings = remember { SettingsRepository(context) }
     val purchaseIdentity = remember { PurchaseIdentity(context) }
+    val globalRankings = remember { GlobalRankingsRepository.get(context) }
+    DisposableEffect(purchaseIdentity,globalRankings) {
+        globalRankings.configureIdentity(purchaseIdentity)
+        val remove=purchaseIdentity.onAuthChanged { globalRankings.syncLogin() }
+        onDispose { remove() }
+    }
     val purchasesApi = remember(purchaseIdentity) {
         if (purchaseIdentity.available) PurchasedDownloadsApi(BuildConfig.PURCHASE_API_URL, { purchaseIdentity.idToken() })
         else null
@@ -261,7 +268,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                             selected = tab == item,
                             onClick = { tab = item; selectedAlbum = null; playerExpanded = false },
                             icon = { Icon(icon, contentDescription = null) },
-                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> BuildConfig.ARTIST_FILTER.ifBlank { "Externas" }; AppTab.PLAYLISTS -> "Listas"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> if (BuildConfig.PROJECT_MODE == "SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER.ifBlank { "Externas" }; AppTab.PLAYLISTS -> "Listas"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -351,12 +358,34 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
 }
 
 @Composable
+private fun rememberFavorites(user: UserLibraryRepository): Set<String> {
+ var favorites by remember(user) { mutableStateOf(user.favorites()) }
+ DisposableEffect(user) { val remove=user.onFavoritesChanged { favorites=user.favorites() }; onDispose { remove() } }
+ return favorites
+}
+
+@Composable
 private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibraryRepository, all: List<Track>, play: (Track) -> Unit, resume: (Track) -> Unit, lastTrackId: String?, online: () -> Unit) {
-    val favorites = user.favorites()
+    val favorites = rememberFavorites(user)
     val recent = user.history().mapNotNull { h -> all.find { it.id == h.trackId } }.take(8)
     val favoriteTracks = all.filter { it.id in favorites }.take(8)
     val lastTrack = lastTrackId?.let { id -> all.find { it.id == id } }
     val onlineAlbums = remote.groupBy { it.artist to it.album }.values.take(6)
+    val rankingContext=androidx.compose.ui.platform.LocalContext.current
+    val rankingsRepository=remember(rankingContext) { GlobalRankingsRepository.get(rankingContext) }
+    var rankingSnapshot by remember { mutableStateOf<RankingSnapshot?>(null) }
+    var rankingStatus by remember { mutableStateOf("Carregando rankings globais…") }
+    var rankingRefresh by remember { mutableIntStateOf(0) }
+    var rankingScope by remember { mutableStateOf(if(BuildConfig.PROJECT_MODE=="FREZZAMUSIC") "general" else BuildConfig.ARTIST_FILTER.lowercase(java.util.Locale.ROOT)) }
+    LaunchedEffect(remote,rankingRefresh) {
+        if(remote.isEmpty()) { rankingStatus="Carregando catálogo para os rankings…"; return@LaunchedEffect }
+        while(kotlinx.coroutines.currentCoroutineContext().isActive) {
+            try { rankingSnapshot=rankingsRepository.rankings(remote); rankingStatus="Contagem de todos os ouvintes dos três apps." }
+            catch(error:kotlinx.coroutines.CancellationException){throw error}
+            catch(_:Exception){rankingStatus=if(rankingSnapshot==null) "Não foi possível carregar os rankings. Tente atualizar." else "Sem conexão. Mostrando o último ranking obtido nesta sessão."}
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
     LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             if (BuildConfig.PROJECT_MODE == "FREZZAMUSIC") {
@@ -364,8 +393,38 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
                     Icon(painterResource(com.frezzamusic.app.R.drawable.frezzamusic_logo), contentDescription="FREZZAMUSIC", tint=Color.Unspecified, modifier=Modifier.size(132.dp))
                     Text("FREZZAMUSIC", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Black)
                 }
-            } else Text(BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            } else Text(if(BuildConfig.PROJECT_MODE=="SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("${local.size} locais • ${remote.size} online • ${favorites.size} favoritas", style=MaterialTheme.typography.bodySmall, modifier=Modifier.fillMaxWidth(), textAlign=TextAlign.Center)
+        }
+        item {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text("Rankings globais",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+                IconButton(onClick={rankingRefresh++}){Icon(Icons.Default.Refresh,"Atualizar rankings")}
+            }
+            Text(rankingStatus,style=MaterialTheme.typography.bodySmall)
+            if(BuildConfig.PROJECT_MODE=="FREZZAMUSIC"){
+                val scopes=listOf("general" to "Geral","solasias" to "SOLASIAS","thefrezza" to "theFrezza")
+                ScrollableTabRow(scopes.indexOfFirst{it.first==rankingScope}.coerceAtLeast(0)){
+                    scopes.forEach{(key,label)->Tab(selected=key==rankingScope,onClick={rankingScope=key},text={Text(label)})}
+                }
+            }
+        }
+        val lists=rankingSnapshot?.scopes?.get(rankingScope)
+        for((kind,ranked) in listOf("Mais ouvidas" to lists?.played,"Mais curtidas" to lists?.liked)) {
+            item(key="ranking-title-"+kind){Text(kind,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
+            if(ranked.isNullOrEmpty()){
+                item(key="ranking-empty-"+kind){Text(if(rankingSnapshot==null) "Aguardando dados do serviço." else "Ainda não há dados suficientes para esta lista.",style=MaterialTheme.typography.bodySmall)}
+            } else items(ranked.take(10),key={"ranking-"+kind+"-"+it.track.id}) { rankedTrack ->
+                val track=rankedTrack.track
+                val position=ranked.indexOf(rankedTrack)+1
+                ListItem(
+                    headlineContent={Text("$position. ${track.title}",maxLines=1,overflow=TextOverflow.Ellipsis)},
+                    supportingContent={Text(track.artist+" • "+rankedTrack.total+if(kind=="Mais ouvidas") " reproduções" else " curtidas")},
+                    leadingContent={if(!track.artwork.isNullOrBlank())AsyncImage(track.artwork,null,Modifier.size(48.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.MusicNote,null)},
+                    trailingContent={Icon(Icons.Default.PlayArrow,"Ouvir ${track.title}")},
+                    modifier=Modifier.clickable{play(track)}
+                )
+            }
         }
         if (lastTrack != null) {
             item {
@@ -451,6 +510,8 @@ private fun HomeScreen(local: List<Track>, remote: List<Track>, user: UserLibrar
 
 @Composable
 private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String) -> Unit, play: (Track) -> Unit, user: UserLibraryRepository, pickArtistImage: (((Uri) -> Unit)) -> Unit, onEdit: (Track) -> Unit) {
+ val favorites=rememberFavorites(user)
+
     val modes=listOf("Músicas","Artistas","Álbuns","Pastas")
     var mode by remember{mutableStateOf("Músicas")}; var sort by remember{mutableStateOf("Título")}; var ascending by remember{mutableStateOf(true)}; var artistFilter by remember{mutableStateOf("Todas")}; var artistMenu by remember{mutableStateOf(false)}; var sortMenu by remember{mutableStateOf(false)}
     val artistOptions=listOf("Todas")+tracks.map{it.artist}.distinct().sorted()
@@ -463,14 +524,14 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
       }
       ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
       LazyColumn{when(mode){
-        "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)},{user.toggleFavorite(t.id)},onEdit)}
+        "Músicas"->items(filtered,key={it.id}){t->TrackRow(t,favorites.contains(t.id),{play(t)},{user.toggleFavorite(t)},onEdit)}
         "Artistas"->items(tracks.filter{query.isBlank()||it.artist.contains(query,true)}.groupBy{it.artist}.toList(),key={it.first}){(n,l)->val custom=user.artistImage(n);ElevatedCard(Modifier.padding(8.dp).fillMaxWidth().clickable{artistFilter=n;mode="Músicas"}){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){Card(Modifier.size(92.dp)){if(custom!=null)AsyncImage(custom,n,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(50.dp))}};Column(Modifier.weight(1f).padding(start=12.dp)){Text(n,fontWeight=FontWeight.Bold);Text("${l.size} faixas");TextButton(onClick={pickArtistImage{uri->user.setArtistImage(n,uri.toString())}}){Icon(Icons.Default.Image,null);Text(" Escolher logo")};if(custom!=null)TextButton(onClick={user.clearArtistImage(n)}){Text("Remover imagem")}}}}}
         "Álbuns"->items(filtered.groupBy{it.artist+" / "+it.album}.values.toList().let{groups->when(sort){"Artista"->groups.sortedBy{it.first().artist.lowercase()};"Data"->groups.sortedBy{it.maxOfOrNull{x->x.dateMs?:0L}?:0L};else->groups.sortedBy{it.first().album.lowercase()}}.let{if(ascending)it else it.reversed()}},key={it.first().artist+"/"+it.first().album}){l->val f=l.first();ListItem(headlineContent={Text(f.album,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(f.artist+" • "+l.size+" faixas")},leadingContent={if(!f.artwork.isNullOrBlank())AsyncImage(f.artwork,null,Modifier.size(56.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},modifier=Modifier.clickable{play(f)})}
         else->{
           val folders=tracks.filter{query.isBlank()||it.folder.orEmpty().contains(query,true)||it.title.contains(query,true)}.groupBy{it.folder?.takeIf{s->s.isNotBlank()}?:"Sem pasta identificada"}.toSortedMap(String.CASE_INSENSITIVE_ORDER)
           folders.forEach{(folder,folderTracks)->
             item(key="folder-header-"+folder){ListItem(headlineContent={Text(folder,fontWeight=FontWeight.Bold)},supportingContent={Text("${folderTracks.size} faixas")},leadingContent={Icon(Icons.Default.Folder,null)})}
-            items(folderTracks,key={"folder-"+folder+"-"+it.id}){t->TrackRow(t,user.favorites().contains(t.id),{play(t)},{user.toggleFavorite(t.id)},onEdit)}
+            items(folderTracks,key={"folder-"+folder+"-"+it.id}){t->TrackRow(t,favorites.contains(t.id),{play(t)},{user.toggleFavorite(t)},onEdit)}
           }
         }
       }}
@@ -478,20 +539,22 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
 }
 @Composable
 private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository, downloads: OfflineDownloadRepository, buy: (Track?, Album?) -> Unit, refresh: () -> Unit, refreshing: Boolean, catalogStatus: String) {
+ val favorites=rememberFavorites(user)
+
  val allAlbums=artists.flatMap{it.albums}; val tracks=allAlbums.flatMap{it.tracks}; var mode by remember{mutableStateOf("Álbuns")};var query by remember{mutableStateOf("")};var artistFilter by remember{mutableStateOf("Todas")};var artistMenu by remember{mutableStateOf(false)};var sort by remember{mutableStateOf("Título")};var ascending by remember{mutableStateOf(true)};var sortMenu by remember{mutableStateOf(false)}
  val artistOptions=listOf("Todas")+artists.map{it.name}.sorted()
- if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,user.favorites().contains(t.id),{play(t,album)},{user.toggleFavorite(t.id)},downloads,{buy(t,album)})}}
+ if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,favorites.contains(t.id),{play(t,album)},{user.toggleFavorite(t)},downloads,{buy(t,album)})}}
  else Column{
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
    Text(catalogStatus, Modifier.weight(1f), style=MaterialTheme.typography.bodySmall)
    IconButton(onClick=refresh, enabled=!refreshing) { Icon(Icons.Default.Refresh, "Atualizar catálogo online") }
   }
 
-  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text(if (BuildConfig.ARTIST_FILTER.isBlank()) "Buscar mídias externas" else "Buscar em ${BuildConfig.ARTIST_FILTER}")},leadingIcon={Icon(Icons.Default.Search,null)})
+  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text(if (BuildConfig.ARTIST_FILTER.isBlank()) "Buscar mídias externas" else "Buscar em ${if(BuildConfig.PROJECT_MODE=="SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER}")},leadingIcon={Icon(Icons.Default.Search,null)})
   if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todos os artistas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todos os artistas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
   val modes=listOf("Músicas","Artistas","Álbuns");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
   val ft=tracks.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||listOf(it.title,it.artist,it.album).any{s->s.contains(query,true)}}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Álbum"->compareBy(String.CASE_INSENSITIVE_ORDER){it.album};"Data"->compareBy<Track>{it.dateMs?:0L};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()}
-  when(mode){"Músicas"->LazyColumn{items(ft,key={it.id}){t->val a=allAlbums.firstOrNull{x->x.title==t.album&&x.artist==t.artist};OnlineTrackRow(t,user.favorites().contains(t.id),{if(a!=null)play(t,a)},{user.toggleFavorite(t.id)},downloads,{buy(t,a)})}};"Artistas"->LazyVerticalGrid(columns=GridCells.Fixed(2),contentPadding=PaddingValues(10.dp)){gridItems(artists.filter{query.isBlank()||it.name.contains(query,true)},key={it.id}){a->val logo=ArtistLogos.forArtist(a.name) ?: a.albums.firstOrNull()?.artwork;Column(Modifier.padding(6.dp).clickable{artistFilter=a.name;mode="Músicas"}){Card(Modifier.fillMaxWidth().aspectRatio(1f)){if(logo != null && (!(logo is String) || logo.isNotBlank())) AsyncImage(logo,a.name,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(60.dp))}};Text(a.name,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=6.dp));Text(a.albums.sumOf{it.tracks.size}.toString()+" faixas",style=MaterialTheme.typography.bodySmall)}}};else->{val fa=allAlbums.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||it.title.contains(query,true)}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Data"->compareBy<Album>{it.releaseDate?:""};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()};LazyColumn{items(fa,key={it.id}){a->val art=a.artwork?:a.tracks.firstOrNull()?.artwork;ListItem(headlineContent={Text(a.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(a.artist+" • "+a.tracks.size+" faixas")},leadingContent={if(!art.isNullOrBlank())AsyncImage(art,null,Modifier.size(64.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},trailingContent={Row{IconButton(onClick={buy(null,a)}){Icon(Icons.Default.Download,"Baixar álbum")};Icon(Icons.Default.ChevronRight,null)}},modifier=Modifier.clickable{open(a)})}}}}
+  when(mode){"Músicas"->LazyColumn{items(ft,key={it.id}){t->val a=allAlbums.firstOrNull{x->x.title==t.album&&x.artist==t.artist};OnlineTrackRow(t,favorites.contains(t.id),{if(a!=null)play(t,a)},{user.toggleFavorite(t)},downloads,{buy(t,a)})}};"Artistas"->LazyVerticalGrid(columns=GridCells.Fixed(2),contentPadding=PaddingValues(10.dp)){gridItems(artists.filter{query.isBlank()||it.name.contains(query,true)},key={it.id}){a->val logo=ArtistLogos.forArtist(a.name) ?: a.albums.firstOrNull()?.artwork;Column(Modifier.padding(6.dp).clickable{artistFilter=a.name;mode="Músicas"}){Card(Modifier.fillMaxWidth().aspectRatio(1f)){if(logo != null && (!(logo is String) || logo.isNotBlank())) AsyncImage(logo,a.name,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,Modifier.size(60.dp))}};Text(a.name,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=6.dp));Text(a.albums.sumOf{it.tracks.size}.toString()+" faixas",style=MaterialTheme.typography.bodySmall)}}};else->{val fa=allAlbums.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||it.title.contains(query,true)}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Data"->compareBy<Album>{it.releaseDate?:""};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()};LazyColumn{items(fa,key={it.id}){a->val art=a.artwork?:a.tracks.firstOrNull()?.artwork;ListItem(headlineContent={Text(a.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(a.artist+" • "+a.tracks.size+" faixas")},leadingContent={if(!art.isNullOrBlank())AsyncImage(art,null,Modifier.size(64.dp),contentScale=ContentScale.Crop)else Icon(Icons.Default.Album,null)},trailingContent={Row{IconButton(onClick={buy(null,a)}){Icon(Icons.Default.Download,"Baixar álbum")};Icon(Icons.Default.ChevronRight,null)}},modifier=Modifier.clickable{open(a)})}}}}
  }
 }
 @Composable

@@ -164,6 +164,7 @@ class PlaybackController(
                     .setArtist(t.artist)
                     .setAlbumTitle(t.album)
                     .setArtworkUri(t.artwork?.let(android.net.Uri::parse))
+                    .setExtras(android.os.Bundle().apply { putString("ranking_drive_id",t.remoteFileId); putString("ranking_folder_id",t.folder); putString("ranking_artist",if(t.remote)t.id.removePrefix("remote:").substringBefore(':') else null) })
                     .build()
             )
             .build()

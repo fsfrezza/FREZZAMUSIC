@@ -5,9 +5,18 @@ import android.content.Context
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.*
+import kotlinx.coroutines.*
+import com.frezzamusic.app.data.GlobalRankingsRepository
+import com.frezzamusic.app.model.Track
+import com.frezzamusic.app.model.TrackSource
 
 class PlaybackService:MediaSessionService(){
  private var session:MediaSession?=null
+ private val rankingScope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+ private val listening=ListeningCounter()
+ private var rankingTrack:Track?=null
+ private var rankingEvent:String=java.util.UUID.randomUUID().toString()
+ private var rankingStarted=false
  private var eq:Equalizer?=null
  private var visualizer:Visualizer?=null
  private var visualizerSessionId:Int=0
@@ -42,6 +51,16 @@ class PlaybackService:MediaSessionService(){
    .setHandleAudioBecomingNoisy(true)
    .build()
   p.addListener(object:Player.Listener{
+   override fun onMediaItemTransition(item:androidx.media3.common.MediaItem?,reason:Int){
+    listening.reset(android.os.SystemClock.elapsedRealtime())
+    rankingEvent=java.util.UUID.randomUUID().toString();rankingStarted=false
+    val extras=item?.mediaMetadata?.extras
+    val drive=extras?.getString("ranking_drive_id")
+    val folder=extras?.getString("ranking_folder_id")
+    val artist=extras?.getString("ranking_artist")
+    rankingTrack=if(item!=null && !drive.isNullOrBlank() && !folder.isNullOrBlank() && artist in listOf("Solasias","theFrezza"))
+     Track(item.mediaId,item.mediaMetadata.title?.toString().orEmpty(),artist!!,item.mediaMetadata.albumTitle?.toString().orEmpty(),"",source=TrackSource.FREZZAMUSIC_STREAM,remoteFileId=drive,folder=folder) else null
+   }
    override fun onAudioSessionIdChanged(id:Int){
     audioSessionId=id
     attachEqualizer(id)
@@ -56,6 +75,15 @@ class PlaybackService:MediaSessionService(){
    }
   })
   session=MediaSession.Builder(this,p).build()
+  rankingScope.launch {
+   val rankings=GlobalRankingsRepository.get(this@PlaybackService)
+   while(isActive){
+    delay(1000)
+    val track=rankingTrack
+    if(p.isPlaying && track!=null && !rankingStarted){rankings.queueStart(track,rankingEvent);rankingStarted=true}
+    if(listening.sample(android.os.SystemClock.elapsedRealtime(),p.isPlaying) && track!=null && rankingStarted)rankings.qualify(rankingEvent)
+   }
+  }
  }
  private fun attachEqualizer(id:Int){
   if(id<=0||id==audioSessionId&&eq!=null)return
@@ -142,5 +170,5 @@ class PlaybackService:MediaSessionService(){
  }
  override fun onGetSession(controllerInfo:MediaSession.ControllerInfo)=session
  override fun onTaskRemoved(rootIntent:android.content.Intent?){if(session?.player?.playWhenReady!=true)stopSelf()}
- override fun onDestroy(){visualizer?.release();visualizer=null;visualizerSessionId=0;visualizerAvailable=false;spectrum=emptyList();waveform=emptyList();eq?.release();eq=null;equalizerAvailable=false;audioSessionId=0;instance=null;session?.run{player.release();release()};session=null;super.onDestroy()}
+ override fun onDestroy(){rankingScope.cancel();visualizer?.release();visualizer=null;visualizerSessionId=0;visualizerAvailable=false;spectrum=emptyList();waveform=emptyList();eq?.release();eq=null;equalizerAvailable=false;audioSessionId=0;instance=null;session?.run{player.release();release()};session=null;super.onDestroy()}
 }

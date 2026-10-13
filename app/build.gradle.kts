@@ -11,8 +11,9 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.22.5"
+        versionCode = 31
+        versionName = "0.22.6"
+        buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
         buildConfigField("String", "PURCHASE_API_URL", "\"" + (providers.gradleProperty("frezzamusicPurchaseApiUrl").orNull ?: "") + "\"")
@@ -31,7 +32,7 @@ android {
             dimension = "project"
             buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("solasiasFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.solasias"
-            resValue("string", "app_name", "Solasias")
+            resValue("string", "app_name", "SOLASIAS")
             buildConfigField("String", "PROJECT_MODE", "\"SOLASIAS\"")
             buildConfigField("String", "ARTIST_FILTER", "\"Solasias\"")
         }

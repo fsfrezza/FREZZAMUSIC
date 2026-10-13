@@ -49,7 +49,7 @@ jobs:
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/frezzamusic/debug/app-frezzamusic-debug.apk dist/FREZZAMUSIC.apk
-          cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk dist/Solasias.apk
+          cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk dist/SOLASIAS.apk
           cp app/build/outputs/apk/thefrezza/debug/app-thefrezza-debug.apk dist/theFrezza.apk
 
       - name: Upload FREZZAMUSIC APK
@@ -61,12 +61,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Solasias APK
+      - name: Upload SOLASIAS APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Solasias
-          path: dist/Solasias.apk
+          name: SOLASIAS
+          path: dist/SOLASIAS.apk
           if-no-files-found: error
           retention-days: 14
 

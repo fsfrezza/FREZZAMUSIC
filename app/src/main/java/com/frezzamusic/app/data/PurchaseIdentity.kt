@@ -48,5 +48,13 @@ class PurchaseIdentity(context: Context) {
 
     suspend fun idToken(): String? = auth().currentUser?.getIdToken(false)?.await()?.token
 
+    fun onAuthChanged(callback: () -> Unit): () -> Unit {
+        if(firebaseApp==null)return {}
+        val auth=auth()
+        val listener=FirebaseAuth.AuthStateListener { callback() }
+        auth.addAuthStateListener(listener)
+        return { auth.removeAuthStateListener(listener) }
+    }
+
     fun signOut() { if (firebaseApp != null) auth().signOut() }
 }
