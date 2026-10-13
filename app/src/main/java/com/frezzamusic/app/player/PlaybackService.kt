@@ -37,7 +37,10 @@ class PlaybackService:MediaSessionService(){
  override fun onCreate(){
   super.onCreate();instance=this
   visualizerEnabled=getSharedPreferences(VISUALIZER_PREFS,Context.MODE_PRIVATE).getBoolean(VISUALIZER_ENABLED,false)
-  val p=ExoPlayer.Builder(this).build()
+  // Pause when a wired/Bluetooth output is disconnected; reconnecting does not resume playback.
+  val p=ExoPlayer.Builder(this)
+   .setHandleAudioBecomingNoisy(true)
+   .build()
   p.addListener(object:Player.Listener{
    override fun onAudioSessionIdChanged(id:Int){
     audioSessionId=id
