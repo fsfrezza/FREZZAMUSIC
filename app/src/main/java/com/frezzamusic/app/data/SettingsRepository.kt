@@ -1,6 +1,7 @@
 package com.frezzamusic.app.data
 import android.content.Context
 class SettingsRepository(context:Context){private val p=context.getSharedPreferences("settings",Context.MODE_PRIVATE)
+ var autoCatalogCheck:Boolean get()=p.getBoolean("autoCatalogCheck",true);set(v){p.edit().putBoolean("autoCatalogCheck",v).apply()}
  var dark:Boolean get()=p.getBoolean("dark",true);set(v){p.edit().putBoolean("dark",v).apply()}
  var crossfadeSeconds:Int get()=p.getInt("crossfade",0);set(v){p.edit().putInt("crossfade",v.coerceIn(0,12)).apply()}
  var speed:Float get()=p.getFloat("speed",1f);set(v){p.edit().putFloat("speed",v.coerceIn(.5f,2f)).apply()}

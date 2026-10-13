@@ -9,6 +9,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CancellationException
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,13 +23,20 @@ internal data class CatalogUpdate(val artists: List<Artist>, val message: String
 /** Queries only the two existing public music roots; no account credentials in APKs. */
 class LiveDriveCatalog(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("live_drive_catalog_v1", Context.MODE_PRIVATE)
-    private val seeds = FrezzaDriveCatalog().rawArtists()
+    init {
+        // Android backup can restore preferences on reinstall; this marker is never backed up.
+        val marker = java.io.File(context.noBackupFilesDir, "live_catalog_install_v1")
+        if (!marker.exists()) {
+            prefs.edit().clear().commit()
+            marker.writeText("1")
+        }
+    }
     private val roots = linkedMapOf("theFrezza" to "1dg1NjJjaN050ewNOwRVMke9CK3Bc2wBa", "Solasias" to "1T0WhRmxjXus3UVdOZJmibRzZxY3kFnbO")
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS).build()
     private val connections = Semaphore(4)
 
     fun status(): String = prefs.getLong("updated_at", 0L).let { time ->
-        if (time == 0L) "Catálogo inicial. Aguardando atualização online."
+        if (time == 0L) "Aguardando o catálogo atual do Drive."
         else "Última atualização: " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(time))
     }
 
@@ -36,33 +44,60 @@ class LiveDriveCatalog(context: Context) {
         artist(name, cachedAlbums(name))
     }
 
-    private fun cachedAlbums(name: String): List<RawAlbum> = try {
-        val encoded = prefs.getString(name, null)
-        if (encoded == null) seeds.getValue(name) else decode(JSONArray(encoded))
-    } catch (_: Exception) { seeds.getValue(name) }
+    private val mutationLock = kotlinx.coroutines.sync.Mutex()
 
-    internal suspend fun refresh(filter: String): CatalogUpdate = withContext(Dispatchers.IO) {
+    internal fun hasCatalog(filter: String): Boolean = targetRoots(filter).keys.all { name ->
+        try { prefs.getString(name, null)?.let { decode(JSONArray(it)); true } ?: false }
+        catch (_: Exception) { false }
+    }
+
+    private fun targetRoots(filter: String) = roots.filterKeys { filter.isBlank() || it.equals(filter, true) }
+    private fun cachedAlbums(name: String): List<RawAlbum> = try {
+        prefs.getString(name, null)?.let { decode(JSONArray(it)) } ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+
+    /** Fetches and compares metadata without saving anything or replacing the visible library. */
+    internal suspend fun check(filter: String): CatalogPreview = withContext(Dispatchers.IO) {
+        val baseline = targetRoots(filter).keys.associateWith { cachedAlbums(it) }
         val failures = mutableListOf<String>()
-        for ((name, root) in roots.filterKeys { filter.isBlank() || it.equals(filter, true) }) {
+        val proposed = linkedMapOf<String, List<RawAlbum>>()
+        for ((name, root) in targetRoots(filter)) {
             try {
-                val previous = cachedAlbums(name).associateBy { it.folderId }
+                val previous = baseline.getValue(name).associateBy { it.folderId }
                 val folders = list(root).filter { it.folder }
-                // Atomic per artist: one failed album must not erase cached tracks.
-                val albums = coroutineScope {
-                    folders.map { folder -> async { DriveFolderParser.album(folder, list(folder.id), previous[folder.id]) } }.awaitAll()
+                proposed[name] = coroutineScope {
+                    folders.map { folder -> async {
+                        val old = previous[folder.id] ?: LegacyAlbumIds.byFolder[folder.id]?.let { id ->
+                            RawAlbum(id, "", folder.id, null, emptyList())
+                        }
+                        DriveFolderParser.album(folder, list(folder.id), old)
+                    } }.awaitAll()
                 }.filter { it.tracks.isNotEmpty() }
-                if (!prefs.edit().putString(name, encode(albums).toString()).putLong("updated_at", System.currentTimeMillis()).commit()) {
-                    throw IOException("Não foi possível guardar o catálogo.")
-                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failures += name }
         }
-        val current = cached(filter)
-        val message = if (failures.isEmpty()) {
-            "Catálogo atualizado: ${current.sumOf { it.albums.size }} álbuns e ${current.sumOf { a -> a.albums.sumOf { it.tracks.size } }} faixas."
-        } else "Não foi possível atualizar ${failures.joinToString()}. O último catálogo disponível foi mantido. Verifique a conexão e o acesso público às pastas."
-        CatalogUpdate(current, message)
+        CatalogPreview(baseline, proposed, failures)
     }
+
+    internal suspend fun apply(preview: CatalogPreview, filter: String): CatalogUpdate = withContext(Dispatchers.IO) {
+        mutationLock.withLock {
+            val current = targetRoots(filter).keys.associateWith { cachedAlbums(it) }
+            val confirmed = preview.approved(current, accepted = true)
+            if (confirmed.isNotEmpty()) {
+                val edit = prefs.edit()
+                confirmed.forEach { (name, albums) -> edit.putString(name, encode(albums).toString()) }
+                if (!edit.putLong("updated_at", System.currentTimeMillis()).commit()) throw IOException("Não foi possível guardar o catálogo.")
+            }
+            val artists = cached(filter)
+            val message = if (preview.failures.isEmpty()) {
+                "Catálogo atualizado: ${artists.sumOf { it.albums.size }} álbuns e ${artists.sumOf { a -> a.albums.sumOf { it.tracks.size } }} faixas."
+            } else "Não foi possível atualizar ${preview.failures.joinToString()}. Esses catálogos foram mantidos. Verifique a conexão e o acesso público às pastas."
+            CatalogUpdate(artists, message)
+        }
+    }
+
+    // First install and manual refresh are already authorized by their user actions.
+    internal suspend fun refresh(filter: String): CatalogUpdate = apply(check(filter), filter)
 
     private suspend fun list(id: String): List<DriveEntry> = connections.withPermit {
         val request = Request.Builder().url("https://drive.google.com/embeddedfolderview?id=$id&hl=pt-BR&_=${System.currentTimeMillis()}")

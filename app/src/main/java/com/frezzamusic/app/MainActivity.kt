@@ -42,6 +42,9 @@ import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
     private lateinit var folders: FolderMusicRepository
@@ -145,6 +148,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     var loading by remember { mutableStateOf(false) }
     val liveCatalog = remember { LiveDriveCatalog(context) }
     var catalogStatus by remember { mutableStateOf(liveCatalog.status()) }
+    var automaticCatalogCheck by remember { mutableStateOf(settings.autoCatalogCheck) }
+    var checkingCatalog by remember { mutableStateOf(false) }
+    var pendingCatalog by remember { mutableStateOf<CatalogPreview?>(null) }
     var playerExpanded by remember { mutableStateOf(false) }
     var fullPlayerPage by remember { mutableIntStateOf(0) }
     var purchaseInitialTrack by remember { mutableStateOf<Track?>(null) }
@@ -162,7 +168,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     }
 
     suspend fun refreshLibrary(online: Boolean = false) {
-        if (loading) return
+        if (loading || checkingCatalog) return
         loading = true
         try {
             artists = liveCatalog.cached(BuildConfig.ARTIST_FILTER)
@@ -184,11 +190,37 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
         finally { loading = false }
     }
 
-    LaunchedEffect(Unit) { refreshLibrary(online = true) }
+    LaunchedEffect(Unit) { refreshLibrary(online = !liveCatalog.hasCatalog(BuildConfig.ARTIST_FILTER)) }
     LaunchedEffect(changeCounter) {
         if (changeCounter > 0) refreshLibrary()
     }
-    val refreshAll: () -> Unit = { editScope.launch { refreshLibrary(online = true) }; Unit }
+    val refreshAll: () -> Unit = { pendingCatalog = null; editScope.launch { refreshLibrary(online = true) }; Unit }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, automaticCatalogCheck) {
+        if (!automaticCatalogCheck) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            CatalogAutoCheck.afterOpen {
+                // A new foreground session restarts the 30-second timer. Never run alongside a refresh.
+                while (loading) kotlinx.coroutines.delay(250)
+                if (pendingCatalog == null) {
+                    checkingCatalog = true
+                    catalogStatus = "Verificando atualizações do catálogo…"
+                    try {
+                        val preview = liveCatalog.check(BuildConfig.ARTIST_FILTER)
+                        if (preview.hasChanges) {
+                            pendingCatalog = preview
+                            catalogStatus = "Há alterações disponíveis. Aguardando sua confirmação."
+                        } else if (preview.failures.isNotEmpty()) {
+                            catalogStatus = "Não foi possível verificar ${preview.failures.joinToString()}. A biblioteca foi mantida."
+                        } else catalogStatus = "A biblioteca online está atualizada."
+                    } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                    catch (_: Exception) { catalogStatus = "Não foi possível verificar atualizações. A biblioteca foi mantida." }
+                    finally { checkingCatalog = false }
+                }
+            }
+        }
+    }
 
     fun edited(track: Track): Track = track.copy(
         title = metadata.effectiveValue("track:" + track.id, "title", track.title) ?: track.title,
@@ -240,9 +272,33 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
             when (tab) {
                 AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
                 AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
-                AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading, catalogStatus = catalogStatus)
+                AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading, catalogStatus = catalogStatus)
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled })
+            }
+            pendingCatalog?.let { preview ->
+                AlertDialog(
+                    onDismissRequest = { pendingCatalog = null; catalogStatus = "Atualização adiada. Sua biblioteca foi mantida." },
+                    title = { Text("Atualizar a biblioteca?") },
+                    text = { Text("Encontramos mudanças no Drive: " + preview.summary() +
+                        if (preview.failures.isEmpty()) "" else " Não foi possível consultar ${preview.failures.joinToString()}; esses catálogos serão mantidos.") },
+                    confirmButton = { Button(onClick = {
+                        pendingCatalog = null
+                        editScope.launch {
+                            loading = true
+                            try {
+                                val update = liveCatalog.apply(preview, BuildConfig.ARTIST_FILTER)
+                                artists = update.artists
+                                catalogStatus = update.message
+                                selectedAlbum = selectedAlbum?.let { selected -> artists.flatMap { it.albums }.find { it.id == selected.id } }
+                            } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                            catch (_: Exception) { catalogStatus = "A confirmação expirou ou a atualização falhou. Toque em Atualizar biblioteca para tentar novamente." }
+                            finally { loading = false }
+                            refreshLibrary()
+                        }
+                    }) { Text("Atualizar") } },
+                    dismissButton = { TextButton(onClick = { pendingCatalog = null; catalogStatus = "Atualização adiada. Sua biblioteca foi mantida." }) { Text("Agora não") } }
+                )
             }
             editingTrack?.let { track ->
                 TrackMetadataEditor(track, onDismiss = { editingTrack = null }, onSave = { changes ->
@@ -498,7 +554,7 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit) {
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -519,6 +575,13 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
                 Button(onClick = add) { Text("Adicionar pasta") }
                 OutlinedButton(onClick = refresh, enabled = !refreshing) { Icon(Icons.Default.Refresh, null); Text(if (refreshing) " Atualizando…" else " Atualizar biblioteca") }
             }
+        }
+        item {
+            ListItem(
+                headlineContent = { Text("Verificar atualizações automaticamente") },
+                supportingContent = { Text("Após 30 segundos ao abrir o app. A biblioteca só muda com sua confirmação.") },
+                trailingContent = { Switch(checked = automaticCheck, onCheckedChange = setAutomaticCheck) }
+            )
         }
         items(folders, key = { it.toString() }) { uri ->
             ListItem(

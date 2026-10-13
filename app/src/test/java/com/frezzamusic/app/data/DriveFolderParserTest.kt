@@ -21,7 +21,8 @@ class DriveFolderParserTest {
     }
 
     @Test fun preservesExistingAlbumAndTrackIdentity() {
-        val seed = FrezzaDriveCatalog().rawArtists().getValue("theFrezza").single { it.id == "frezza" }
+        val files = DriveFolderParser.parse(fixture("drive-folder"))
+        val seed = RawAlbum("frezza", "Frezza", "1xL2kza5-2I7cYn8z8FAnZsH0rkjgFckU", null, files.filter { it.name.endsWith(".mp3") }.map { it.id to it.name })
         val folder = DriveEntry(seed.folderId, "01 - Frezza", true)
         val updated = DriveFolderParser.album(folder, DriveFolderParser.parse(fixture("drive-folder")), seed)
         assertEquals(seed.id, updated.id)
