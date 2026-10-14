@@ -34,6 +34,7 @@ class LiveDriveCatalog(context: Context) {
     private val roots = linkedMapOf("theFrezza" to "1dg1NjJjaN050ewNOwRVMke9CK3Bc2wBa", "Solasias" to "1T0WhRmxjXus3UVdOZJmibRzZxY3kFnbO")
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS).build()
     private val connections = Semaphore(4)
+    private val releaseDates=RemoteReleaseDates(context)
 
     fun status(): String = prefs.getLong("updated_at", 0L).let { time ->
         if (time == 0L) "Aguardando o catálogo atual do Drive."
@@ -57,7 +58,7 @@ class LiveDriveCatalog(context: Context) {
     } catch (_: Exception) { emptyList() }
 
     /** Fetches and compares metadata without saving anything or replacing the visible library. */
-    internal suspend fun check(filter: String): CatalogPreview = withContext(Dispatchers.IO) {
+    internal suspend fun check(filter: String, forceTags:Boolean=false): CatalogPreview = withContext(Dispatchers.IO) {
         val baseline = targetRoots(filter).keys.associateWith { cachedAlbums(it) }
         val failures = mutableListOf<String>()
         val proposed = linkedMapOf<String, List<RawAlbum>>()
@@ -70,7 +71,7 @@ class LiveDriveCatalog(context: Context) {
                         val old = previous[folder.id] ?: LegacyAlbumIds.byFolder[folder.id]?.let { id ->
                             RawAlbum(id, "", folder.id, null, emptyList())
                         }
-                        DriveFolderParser.album(folder, list(folder.id), old)
+                        releaseDates.album(DriveFolderParser.album(folder, list(folder.id), old),forceTags)
                     } }.awaitAll()
                 }.filter { it.tracks.isNotEmpty() }.let { albums ->
                     val names=folders.associateBy { it.id }
@@ -101,7 +102,7 @@ class LiveDriveCatalog(context: Context) {
     }
 
     // First install and manual refresh are already authorized by their user actions.
-    internal suspend fun refresh(filter: String): CatalogUpdate = apply(check(filter), filter)
+    internal suspend fun refresh(filter: String): CatalogUpdate = apply(check(filter,forceTags=true), filter)
 
     private suspend fun list(id: String): List<DriveEntry> = connections.withPermit {
         val request = Request.Builder().url("https://drive.google.com/embeddedfolderview?id=$id&hl=pt-BR&_=${System.currentTimeMillis()}")
@@ -127,10 +128,10 @@ class LiveDriveCatalog(context: Context) {
 
     private fun artist(name: String, albums: List<RawAlbum>) = Artist(name.lowercase(java.util.Locale.ROOT), name, albums.map { album(name, it) }, virtualProject = true, description = "Projeto musical virtual")
     private fun encode(albums: List<RawAlbum>) = JSONArray().apply {
-        albums.forEach { a -> put(JSONObject().put("id", a.id).put("title", a.title).put("order", a.albumOrder ?: JSONObject.NULL).put("folder", a.folderId).put("cover", a.coverId ?: JSONObject.NULL).put("tracks", JSONArray().apply { a.tracks.forEach { (id, name) -> put(JSONObject().put("id", id).put("name", name)) } })) }
+        albums.forEach { a -> put(JSONObject().put("id", a.id).put("title", a.title).put("order", a.albumOrder ?: JSONObject.NULL).put("dates",JSONObject(a.releaseDates)).put("folder", a.folderId).put("cover", a.coverId ?: JSONObject.NULL).put("tracks", JSONArray().apply { a.tracks.forEach { (id, name) -> put(JSONObject().put("id", id).put("name", name)) } })) }
     }
     private fun decode(array: JSONArray): List<RawAlbum> = (0 until array.length()).map { i ->
         val a = array.getJSONObject(i); val tracks = a.getJSONArray("tracks")
-        RawAlbum(a.getString("id"), a.getString("title"), a.getString("folder"), if (a.isNull("cover")) null else a.getString("cover"), (0 until tracks.length()).map { j -> tracks.getJSONObject(j).let { it.getString("id") to it.getString("name") } }, a.optInt("order",0).takeIf { it>0 })
+        RawAlbum(a.getString("id"), a.getString("title"), a.getString("folder"), if (a.isNull("cover")) null else a.getString("cover"), (0 until tracks.length()).map { j -> tracks.getJSONObject(j).let { it.getString("id") to it.getString("name") } }, a.optInt("order",0).takeIf { it>0 }, a.optJSONObject("dates")?.let { dates->dates.keys().asSequence().associateWith{dates.getString(it)} } ?: emptyMap())
     }
 }

@@ -25,7 +25,8 @@ data class Track(
     val lyrics: String? = null,
     val lrc: String? = null,
     val albumOrderGroup: String? = null,
-    val albumOrder: Int? = null
+    val albumOrder: Int? = null,
+    val releaseDate: String? = null
 ) { val remote: Boolean get() = source != TrackSource.LOCAL }
 
 data class Album(

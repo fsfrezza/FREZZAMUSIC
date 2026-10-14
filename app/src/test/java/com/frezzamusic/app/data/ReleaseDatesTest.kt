@@ -1,0 +1,12 @@
+package com.frezzamusic.app.data
+import org.junit.Test
+import org.junit.Assert.*
+import com.frezzamusic.app.model.Track
+import com.frezzamusic.app.model.Album
+class ReleaseDatesTest {
+ @Test fun validatesAndRequiresStrictMajority(){assertEquals("2025-02-03",ReleaseDates.normalize("03/02/2025"));assertNull(ReleaseDates.normalize("2025-02-30"));assertEquals("2025-03",ReleaseDates.normalize("2025-03"));assertEquals("2025-02-03",ReleaseDates.majority(listOf("2025-02-03","2025-02-03","2025")));assertEquals("2025",ReleaseDates.majority(listOf("2025-02-03","2025-04-05",null,"2025")));assertFalse(ReleaseDates.detailed(ReleaseDates.majority(listOf("2025-02-03",null))))}
+ @Test fun detailedDatesOverrideFolderNumbers(){val a=listOf(Album("a","A","Band",releaseDate="2025-08-01",albumOrderGroup="root",albumOrder=1),Album("b","B","Band",releaseDate="2025-02-01",albumOrderGroup="root",albumOrder=2));assertEquals(listOf("b","a"),AlbumFolderOrder.albums(a).map{it.id});val groups=a.map{x->listOf(Track(x.id,"Song","Band",x.title,"",releaseDate=x.releaseDate,albumOrderGroup="root",albumOrder=x.albumOrder),Track(x.id+"2","Song2","Band",x.title,"",releaseDate=x.releaseDate,albumOrderGroup="root",albumOrder=x.albumOrder))};assertEquals(listOf("b","a"),AlbumFolderOrder.local(groups).map{it.first().id})}
+ @Test fun yearOnlyAllowsVerifiedSequence(){val a=(1..3).reversed().map{Album("$it","$it","Band",releaseDate="2025",albumOrderGroup="root",albumOrder=it)};assertEquals(listOf("1","2","3"),AlbumFolderOrder.albums(a).map{it.id})}
+ @Test fun filteringOneSongDoesNotCreateAnAlbumDateMajority(){val all=(1..3).flatMap{n->(1..3).map{i->Track("$n-$i","Song","Band","Album $n","",releaseDate=if(i==1)"2025-0${4-n}-01" else null,albumOrderGroup="root",albumOrder=n)}};val subset=(1..3).reversed().map{n->listOf(all.first{it.id=="$n-1"})};assertEquals(listOf("1-1","2-1","3-1"),AlbumFolderOrder.local(subset,all).map{it.first().id})}
+ @Test fun parsesId3ReleaseFrame(){val text=byteArrayOf(3)+"2025-02-03".toByteArray();val frame="TDRL".toByteArray()+byteArrayOf(0,0,0,text.size.toByte(),0,0)+text;val header="ID3".toByteArray()+byteArrayOf(4,0,0,0,0,0,frame.size.toByte());assertEquals("2025-02-03",ReleaseDates.fromId3(header+frame));assertNull(ReleaseDates.fromId3("<html>Not music</html>".toByteArray()))}
+}

@@ -41,7 +41,7 @@ class FolderMusicRepository(private val context: Context) {
                 val genre=if(genreI>=0) cur.getString(genreI)?.takeIf{it.isNotBlank()} else null
                 val folderLabel=if(pathI>=0) cur.getString(pathI)?.trimEnd('/')?.substringAfterLast('/')?.takeIf{it.isNotBlank()} else null
                 if(pathI>=0)cur.getString(pathI)?.let{paths["device:$id"]=it}
-                out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),artwork=artwork,trackNumber=trackNo,durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000),genre=genre,folder=folderLabel)
+                out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),artwork=artwork,trackNumber=trackNo,durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000),genre=genre,folder=folderLabel,releaseDate=readReleaseDate(uri))
             }
         }; return AlbumFolderOrder.device(out,paths)
     }
@@ -69,8 +69,14 @@ class FolderMusicRepository(private val context: Context) {
             val n=r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)?.substringBefore('/')?.toIntOrNull()
             val d=r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
             val genre=r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
-            Track("folder:$uri",title,artist,album,uri.toString(),trackNumber=n,durationMs=d,dateMs=dateMs.takeIf{it>0},genre=genre)
+            Track("folder:$uri",title,artist,album,uri.toString(),trackNumber=n,durationMs=d,dateMs=dateMs.takeIf{it>0},genre=genre,releaseDate=readReleaseDate(uri,r))
         } catch(_:Exception){ Track("folder:$uri",fallback,"Artista desconhecido","Álbum desconhecido",uri.toString(),dateMs=dateMs.takeIf{it>0}) } finally { try{r.release()}catch(_:Exception){} }
+    }
+    private fun readReleaseDate(uri:Uri,existing:MediaMetadataRetriever?=null):String? {
+        val tag=runCatching{context.contentResolver.openInputStream(uri)?.use { input->val out=java.io.ByteArrayOutputStream();val b=ByteArray(4096);while(out.size()<65536){val n=input.read(b,0,minOf(b.size,65536-out.size()));if(n<0)break;out.write(b,0,n)};ReleaseDates.fromId3(out.toByteArray()) }}.getOrNull()
+        if(tag!=null)return tag
+        val retriever=existing?:MediaMetadataRetriever()
+        return try{if(existing==null)retriever.setDataSource(context,uri);ReleaseDates.normalize(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE))?:ReleaseDates.normalize(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR))}catch(_:Exception){null}finally{if(existing==null)runCatching{retriever.release()}}
     }
     private fun isAudio(f:DocumentFile):Boolean = f.type?.startsWith("audio/")==true || listOf("mp3","flac","m4a","aac","ogg","opus","wav").any { f.name?.endsWith(".$it",true)==true }
 }
