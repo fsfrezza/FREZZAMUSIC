@@ -25,6 +25,7 @@ class FolderMusicRepository(private val context: Context) {
         }
     }
     fun scanDevice(): List<Track> {
+        val paths=mutableMapOf<String,String>()
         val out= mutableListOf<Track>(); val collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection=mutableListOf(MediaStore.Audio.Media._ID,MediaStore.Audio.Media.TITLE,MediaStore.Audio.Media.ARTIST,MediaStore.Audio.Media.ALBUM,MediaStore.Audio.Media.DURATION,MediaStore.Audio.Media.DATE_MODIFIED,MediaStore.Audio.Media.TRACK,MediaStore.Audio.Media.GENRE,MediaStore.Audio.Media.ALBUM_ID).apply {
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.Audio.Media.RELATIVE_PATH)
@@ -39,15 +40,24 @@ class FolderMusicRepository(private val context: Context) {
                 val trackNo=cur.getInt(trackI).takeIf{it>0}?.let{it % 1000}
                 val genre=if(genreI>=0) cur.getString(genreI)?.takeIf{it.isNotBlank()} else null
                 val folderLabel=if(pathI>=0) cur.getString(pathI)?.trimEnd('/')?.substringAfterLast('/')?.takeIf{it.isNotBlank()} else null
+                if(pathI>=0)cur.getString(pathI)?.let{paths["device:$id"]=it}
                 out+=Track("device:"+id,cur.getString(titleI)?:"Faixa",cur.getString(artistI)?:"Artista desconhecido",cur.getString(albumI)?:"Álbum desconhecido",uri.toString(),artwork=artwork,trackNumber=trackNo,durationMs=cur.getLong(durI),dateMs=cur.getLong(dateI).takeIf{it>0}?.times(1000),genre=genre,folder=folderLabel)
             }
-        }; return out
+        }; return AlbumFolderOrder.device(out,paths)
     }
     private fun scanTree(root: DocumentFile?): List<Track> {
         if(root==null || !root.exists()) return emptyList()
-        val out= mutableListOf<Track>()
-        fun walk(f:DocumentFile){ if(f.isDirectory) f.listFiles().forEach(::walk) else if(f.isFile && isAudio(f)){ val name=f.name?.substringBeforeLast('.')?:"Faixa"; val m=metadata(f.uri,name,f.lastModified()); out += m.copy(folder=f.parentFile?.name ?: root.name) } }
-        walk(root); return out
+        fun walk(f:DocumentFile):List<Track> {
+            if(f.isFile)return if(isAudio(f))listOf(metadata(f.uri,f.name?.substringBeforeLast('.')?:"Faixa",f.lastModified()).copy(folder=f.parentFile?.name?:root.name)) else emptyList()
+            if(!f.isDirectory)return emptyList()
+            val children=f.listFiles().map{it to walk(it)}
+            val albums=children.filter{it.first.isDirectory && it.second.isNotEmpty()}
+            val keys=albums.map{it.second.map{t->t.artist to t.album}.distinct()}
+            val order=if(keys.all{it.size==1} && keys.flatten().distinct().size==albums.size)
+                AlbumFolderOrder.detect(albums.map{it.first.uri.toString() to it.first.name.orEmpty()}) else emptyMap()
+            return children.flatMap { (child,tracks)->order[child.uri.toString()]?.let{n->tracks.map{it.copy(albumOrderGroup="folder:${f.uri}",albumOrder=n)}}?:tracks }
+        }
+        return walk(root)
     }
     private fun metadata(uri:Uri,fallback:String,dateMs:Long):Track {
         val r=MediaMetadataRetriever()

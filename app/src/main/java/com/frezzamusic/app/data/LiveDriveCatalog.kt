@@ -72,7 +72,11 @@ class LiveDriveCatalog(context: Context) {
                         }
                         DriveFolderParser.album(folder, list(folder.id), old)
                     } }.awaitAll()
-                }.filter { it.tracks.isNotEmpty() }
+                }.filter { it.tracks.isNotEmpty() }.let { albums ->
+                    val names=folders.associateBy { it.id }
+                    val order=AlbumFolderOrder.detect(albums.map { it.folderId to names.getValue(it.folderId).name })
+                    albums.map { it.copy(albumOrder=order[it.folderId]) }
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failures += name }
         }
@@ -123,10 +127,10 @@ class LiveDriveCatalog(context: Context) {
 
     private fun artist(name: String, albums: List<RawAlbum>) = Artist(name.lowercase(java.util.Locale.ROOT), name, albums.map { album(name, it) }, virtualProject = true, description = "Projeto musical virtual")
     private fun encode(albums: List<RawAlbum>) = JSONArray().apply {
-        albums.forEach { a -> put(JSONObject().put("id", a.id).put("title", a.title).put("folder", a.folderId).put("cover", a.coverId ?: JSONObject.NULL).put("tracks", JSONArray().apply { a.tracks.forEach { (id, name) -> put(JSONObject().put("id", id).put("name", name)) } })) }
+        albums.forEach { a -> put(JSONObject().put("id", a.id).put("title", a.title).put("order", a.albumOrder ?: JSONObject.NULL).put("folder", a.folderId).put("cover", a.coverId ?: JSONObject.NULL).put("tracks", JSONArray().apply { a.tracks.forEach { (id, name) -> put(JSONObject().put("id", id).put("name", name)) } })) }
     }
     private fun decode(array: JSONArray): List<RawAlbum> = (0 until array.length()).map { i ->
         val a = array.getJSONObject(i); val tracks = a.getJSONArray("tracks")
-        RawAlbum(a.getString("id"), a.getString("title"), a.getString("folder"), if (a.isNull("cover")) null else a.getString("cover"), (0 until tracks.length()).map { j -> tracks.getJSONObject(j).let { it.getString("id") to it.getString("name") } })
+        RawAlbum(a.getString("id"), a.getString("title"), a.getString("folder"), if (a.isNull("cover")) null else a.getString("cover"), (0 until tracks.length()).map { j -> tracks.getJSONObject(j).let { it.getString("id") to it.getString("name") } }, a.optInt("order",0).takeIf { it>0 })
     }
 }
