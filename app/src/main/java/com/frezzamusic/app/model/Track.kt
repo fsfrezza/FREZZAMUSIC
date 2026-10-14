@@ -17,12 +17,16 @@ data class Track(
     val dateMs: Long? = null,
     val remoteFileId: String? = null,
     val genre: String? = null,
+    val folder: String? = null,
     val quality: AudioQuality = AudioQuality.UNKNOWN,
     val canStream: Boolean = true,
     val canDownload: Boolean = source == TrackSource.LOCAL,
     val downloadPriceBrl: Double? = null,
     val lyrics: String? = null,
-    val lrc: String? = null
+    val lrc: String? = null,
+    val albumOrderGroup: String? = null,
+    val albumOrder: Int? = null,
+    val releaseDate: String? = null
 ) { val remote: Boolean get() = source != TrackSource.LOCAL }
 
 data class Album(
@@ -34,7 +38,9 @@ data class Album(
     val status: ReleaseStatus = ReleaseStatus.RELEASED,
     val releaseDate: String? = null,
     val description: String? = null,
-    val albumPriceBrl: Double? = null
+    val albumPriceBrl: Double? = null,
+    val albumOrderGroup: String? = null,
+    val albumOrder: Int? = null
 )
 data class Artist(val id:String,val name:String,val albums:List<Album> = emptyList(), val virtualProject:Boolean = false, val description:String? = null)
 data class MusicQueue(val id:String,val name:String,val trackIds:List<String> = emptyList())

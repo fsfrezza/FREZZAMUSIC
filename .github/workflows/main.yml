@@ -9,11 +9,13 @@ on:
     paths:
       - "app/**"
       - "*.gradle.kts"
+      - "gradle.properties"
       - ".github/workflows/**"
   pull_request:
     paths:
       - "app/**"
       - "*.gradle.kts"
+      - "gradle.properties"
       - ".github/workflows/**"
 
 jobs:
@@ -36,14 +38,43 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Test catalog parsing and identity
+        run: gradle :app:testFrezzamusicDebugUnitTest --stacktrace
+
       - name: Build all debug variants
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Upload debug APKs
+      - name: Prepare APK names
+        if: success()
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/frezzamusic/debug/app-frezzamusic-debug.apk dist/FREZZAMUSIC.apk
+          cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk dist/SOLASIAS.apk
+          cp app/build/outputs/apk/thefrezza/debug/app-thefrezza-debug.apk dist/theFrezza.apk
+
+      - name: Upload FREZZAMUSIC APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: FREZZAMUSIC-v0.20-debug-apks
-          path: app/build/outputs/apk/**/*.apk
+          name: FREZZAMUSIC
+          path: dist/FREZZAMUSIC.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload SOLASIAS APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOLASIAS
+          path: dist/SOLASIAS.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload theFrezza APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theFrezza
+          path: dist/theFrezza.apk
           if-no-files-found: error
           retention-days: 14
