@@ -38,6 +38,17 @@ class DriveFolderParserTest {
         assertEquals("The Frostborn Oars", DriveFolderParser.displayTitle("11. The Frostborn Oars"))
     }
 
+    @Test fun prefersOriginalPngOverPreviouslySelectedJpeg() {
+        val folder = DriveEntry("album", "01 - Album", true)
+        val files = listOf(DriveEntry("jpeg", "cover.jpg", false), DriveEntry("png", "capa.PNG", false))
+        val previous = RawAlbum("stable", "Album", folder.id, "jpeg", emptyList())
+        val updated = DriveFolderParser.album(folder, files, previous)
+        assertEquals("png", updated.coverId)
+        assertEquals("stable", updated.id)
+        assertEquals("https://drive.google.com/uc?export=download&id=png", album("theFrezza", updated).artwork)
+        assertEquals("jpeg", DriveFolderParser.album(folder, files.take(1), previous).coverId)
+    }
+
     @Test(expected = IOException::class) fun rejectsLoginPage() {
         DriveFolderParser.parse("<html><body>Sign in</body></html>")
     }
