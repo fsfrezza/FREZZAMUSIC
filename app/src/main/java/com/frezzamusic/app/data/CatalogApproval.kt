@@ -6,7 +6,8 @@ import java.io.IOException
 internal data class CatalogPreview(
     val baseline: Map<String, List<RawAlbum>>,
     val proposed: Map<String, List<RawAlbum>>,
-    val failures: List<String>
+    val failures: List<String>,
+    val unverifiedDates: Int = 0
 ) {
     val changedArtists: List<String> get() = proposed.keys.filter { name ->
         baseline[name].orEmpty().sortedBy { it.folderId } != proposed.getValue(name).sortedBy { it.folderId }

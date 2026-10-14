@@ -59,6 +59,7 @@ class LiveDriveCatalog(context: Context) {
 
     /** Fetches and compares metadata without saving anything or replacing the visible library. */
     internal suspend fun check(filter: String, forceTags:Boolean=false): CatalogPreview = withContext(Dispatchers.IO) {
+        releaseDates.beginCheck()
         val baseline = targetRoots(filter).keys.associateWith { cachedAlbums(it) }
         val failures = mutableListOf<String>()
         val proposed = linkedMapOf<String, List<RawAlbum>>()
@@ -81,7 +82,7 @@ class LiveDriveCatalog(context: Context) {
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failures += name }
         }
-        CatalogPreview(baseline, proposed, failures)
+        CatalogPreview(baseline, proposed, failures, releaseDates.unavailableCount())
     }
 
     internal suspend fun apply(preview: CatalogPreview, filter: String): CatalogUpdate = withContext(Dispatchers.IO) {
@@ -95,9 +96,9 @@ class LiveDriveCatalog(context: Context) {
             }
             val artists = cached(filter)
             val message = if (preview.failures.isEmpty()) {
-                "Catálogo atualizado: ${artists.sumOf { it.albums.size }} álbuns e ${artists.sumOf { a -> a.albums.sumOf { it.tracks.size } }} faixas."
+                "Biblioteca sincronizada e reorganizada: ${artists.sumOf { it.albums.size }} álbuns e ${artists.sumOf { a -> a.albums.sumOf { it.tracks.size } }} faixas."
             } else "Não foi possível atualizar ${preview.failures.joinToString()}. Esses catálogos foram mantidos. Verifique a conexão e o acesso público às pastas."
-            CatalogUpdate(artists, message)
+            CatalogUpdate(artists, message + if(preview.unverifiedDates>0) " Não foi possível confirmar a data de ${preview.unverifiedDates} faixas; não foram reutilizadas datas antigas na atualização manual." else "")
         }
     }
 

@@ -24,7 +24,7 @@ internal object AlbumFolderOrder {
         }
         return result
     }
-    fun albums(albums:List<Album>)=reorder(albums.sortedWith(compareBy<Album>{ReleaseDates.normalize(it.releaseDate).orEmpty()}.thenBy{it.title.lowercase(java.util.Locale.ROOT)}),{if(ReleaseDates.detailed(it.releaseDate))null else it.albumOrderGroup?.let{g->g+":"+ReleaseDates.normalize(it.releaseDate).orEmpty()}},{it.albumOrder})
+    fun albums(albums:List<Album>)=reorder(albums.sortedWith(compareBy<Album>{ReleaseDates.normalize(it.releaseDate).orEmpty()}.thenBy{it.title.lowercase(java.util.Locale.ROOT)}),{if(ReleaseDates.detailed(it.releaseDate))null else it.albumOrderGroup},{it.albumOrder})
     fun local(groups:List<List<Track>>, allTracks:List<Track> = groups.flatten()):List<List<Track>> {
         val originals=allTracks.groupBy{it.artist to it.album}
         fun release(g:List<Track>)=ReleaseDates.majority((originals[g.first().artist to g.first().album]?:g).map{it.releaseDate})
@@ -32,7 +32,7 @@ internal object AlbumFolderOrder {
             val ids=g.map{it.albumOrderGroup to it.albumOrder}.distinct()
             val v=ids.singleOrNull()?:return null
             val date=release(g)
-            return if(!ReleaseDates.detailed(date) && v.first!=null && v.second!=null) (v.first!!+":"+date.orEmpty()) to v.second!! else null
+            return if(!ReleaseDates.detailed(date) && v.first!=null && v.second!=null) v.first!! to v.second!! else null
         }
         return reorder(groups.sortedWith(compareBy<List<Track>>{release(it).orEmpty()}.thenBy{g->g.maxOfOrNull{it.dateMs?:0L}?:0L}),{identity(it)?.first},{identity(it)?.second})
     }

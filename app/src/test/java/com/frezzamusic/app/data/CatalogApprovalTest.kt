@@ -26,6 +26,8 @@ class CatalogApprovalTest {
         assertTrue(preview(emptyList()).hasChanges)
     }
 
+    @Test fun refreshReplacesTheSnapshotIncludingNamesTracksCoversDatesAndOrder(){val removed=old.copy(id="removed",folderId="gone");val updated=old.copy(title="Current",coverId="new-cover",tracks=listOf("new-song" to "Current.mp3"),albumOrder=2,releaseDates=mapOf("new-song" to "2026-03-04"));val baseline=mapOf("theFrezza" to listOf(old,removed));val p=CatalogPreview(baseline,mapOf("theFrezza" to listOf(updated)),emptyList());val current=p.approved(baseline,true).getValue("theFrezza");assertEquals(listOf(updated),current);assertFalse(current.any{it.folderId=="gone"});assertFalse(current.flatMap{it.tracks}.any{it.first=="one"});assertEquals(2,current.single().albumOrder);assertEquals("2026-03-04",current.single().releaseDates["new-song"])}
+
     @Test fun unchangedCatalogDoesNotPrompt() {
         assertFalse(preview(listOf(old)).hasChanges)
         val unavailable = CatalogPreview(mapOf("theFrezza" to listOf(old)), emptyMap(), listOf("theFrezza"))

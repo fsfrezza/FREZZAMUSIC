@@ -8,6 +8,10 @@ Nomes, datas reais e IDs não são alterados. Entre coleções independentes, a 
 
 ## Prioridade da data real
 
-Uma data válida com mês ou dia, compartilhada por mais da metade das faixas, prevalece sobre a numeração. Datas divergentes sem maioria não são inventadas; conserva-se somente um ano se houver maioria para esse ano. A numeração só reordena álbuns sem data detalhada e dentro do mesmo ano conhecido (ou da coleção sem ano). Datas de modificação são mantidas separadas e usadas apenas no comportamento de fallback local.
+Uma data válida com mês ou dia, compartilhada por mais da metade das faixas, prevalece sobre a numeração. Datas divergentes sem maioria não são inventadas; conserva-se somente um ano se houver maioria para esse ano. A numeração reordena todos os álbuns da mesma série sem data detalhada, sem separar por ano ou ausência de data. Datas de modificação são mantidas separadas e usadas apenas no comportamento de fallback local.
 
-Faixas locais: leitura das tags ID3 e das datas do MediaMetadataRetriever. Drive: leitura limitada aos primeiros 64 KiB dos MP3, com até oito requisições simultâneas, sem salvar áudio. Datas consultadas ficam em cache por 24 horas; atualização manual refaz a consulta. Tags ausentes, inválidas, comprimidas ou fora do limite não geram datas fictícias.
+Faixas locais: leitura das tags ID3 e das datas do MediaMetadataRetriever. Drive: leitura limitada aos primeiros 64 KiB dos MP3, com até oito requisições simultâneas, sem salvar áudio. Datas consultadas ficam em cache por 24 horas; atualização manual refaz a consulta e não reaproveita dados antigos quando a consulta atual falha. Tags ausentes, inválidas, comprimidas ou fora do limite não geram datas fictícias.
+
+## Atualização completa
+
+Atualizar biblioteca relê as pastas e substitui a lista de cada fonte que foi lida com sucesso. Inclui adições, remoções, renomeações, mudanças de faixas, escolha atual de capa e numeração; não mescla álbuns antigos de volta. Metadados de data são consultados novamente. Fontes indisponíveis são mantidas com aviso explícito, sem tratar falha de acesso como catálogo vazio. Não altera os arquivos originais nem apaga playlists/histórico pessoais.

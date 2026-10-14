@@ -34,8 +34,7 @@ internal object DriveFolderParser {
         val images = files.filter { !it.folder && it.name.substringAfterLast('.', "").lowercase(Locale.ROOT) in setOf("png", "jpg", "jpeg", "webp") }
         val pngs = images.filter { it.name.endsWith(".png", ignoreCase = true) }
         val candidates = pngs.ifEmpty { images }
-        val cover = candidates.firstOrNull { it.id == previous?.coverId }
-            ?: candidates.firstOrNull { it.name.contains("capa", true) || it.name.contains("cover", true) || it.name.contains("front", true) }
+        val cover = candidates.firstOrNull { it.name.contains("capa", true) || it.name.contains("cover", true) || it.name.contains("front", true) }
             ?: candidates.firstOrNull()
         return RawAlbum(previous?.id ?: "drive:${folder.id}", displayTitle(folder.name), folder.id, cover?.id, tracks.map { it.id to it.name })
     }

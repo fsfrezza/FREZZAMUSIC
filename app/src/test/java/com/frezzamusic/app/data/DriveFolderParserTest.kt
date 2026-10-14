@@ -49,6 +49,8 @@ class DriveFolderParserTest {
         assertEquals("jpeg", DriveFolderParser.album(folder, files.take(1), previous).coverId)
     }
 
+    @Test fun refreshChoosesCurrentCoverInsteadOfPinningTheOldImage(){val folder=DriveEntry("album","01 - Album",true);val old=RawAlbum("stable","Old name",folder.id,"old-image",listOf("removed-track" to "Old.mp3"));val files=listOf(DriveEntry("old-image","art.png",false),DriveEntry("new-image","cover.png",false),DriveEntry("new-track","01 - New.mp3",false));val next=DriveFolderParser.album(folder,files,old);assertEquals("new-image",next.coverId);assertEquals(listOf("new-track"),next.tracks.map{it.first});assertEquals("Album",next.title);assertEquals("stable",next.id)}
+
     @Test(expected = IOException::class) fun rejectsLoginPage() {
         DriveFolderParser.parse("<html><body>Sign in</body></html>")
     }
