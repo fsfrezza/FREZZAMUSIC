@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "0.23.1"
+        versionCode = 37
+        versionName = "0.23.2"
         buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
@@ -43,6 +43,26 @@ android {
             resValue("string", "app_name", "theFrezza")
             buildConfigField("String", "PROJECT_MODE", "\"THEFREZZA\"")
             buildConfigField("String", "ARTIST_FILTER", "\"theFrezza\"")
+        }
+    }
+    // Signing material comes from the environment, never from this public repository.
+    val releaseStore = providers.environmentVariable("FREZZAMUSIC_KEYSTORE_PATH").orNull
+    signingConfigs {
+        if (releaseStore != null) create("production") {
+            storeFile = file(releaseStore)
+            storePassword = providers.environmentVariable("FREZZAMUSIC_KEYSTORE_PASSWORD").get()
+            keyAlias = providers.environmentVariable("FREZZAMUSIC_KEY_ALIAS").get()
+            keyPassword = providers.environmentVariable("FREZZAMUSIC_KEY_PASSWORD").get()
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+            isJniDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("production")
         }
     }
     buildFeatures { compose = true; buildConfig = true }

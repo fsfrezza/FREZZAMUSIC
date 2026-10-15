@@ -24,12 +24,10 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
  for(const button of ['bandOpen','mainOpen'])el(button).addEventListener('click',()=>{el('status').textContent='Se o aplicativo não abrir, instale ou atualize pelos botões abaixo e tente novamente.';});
  if(validCode)fetch('../catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(catalog=>{
   const entry=Object.hasOwn(catalog,code)?catalog[code]:null;
-  if(!entry||entry.artist!==artist||entry.kind!==kind||!/^[A-Za-z0-9_-]{1,160}$/.test(entry.id||''))return;
+  if(!entry||entry.artist!==artist||entry.kind!==kind)return;
   el('title').textContent=String(entry.title).slice(0,240);
   el('detail').textContent=band.name+(kind==='track'?' • '+String(entry.album).slice(0,240):'');
   document.title=el('title').textContent+' — '+band.name;
-  // Known catalog entries can also be opened by v0.23.0, using the original protocol.
-  setButtons(new URLSearchParams({artist,kind,id:entry.id}).toString());
   try{const image=new URL(entry.cover);if(image.protocol==='https:'&&image.hostname==='drive.google.com'&&image.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(image.searchParams.get('id')||'')){el('cover').src=image.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
  }).catch(()=>{});
  el('bandOpen').textContent='Abrir no '+band.name;el('actions').hidden=false;

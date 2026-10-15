@@ -26,15 +26,19 @@ def album_job(job):
  cover=next((id for id,n in candidates if any(x in n.lower() for x in ['cover','capa','front'])),candidates[0][0] if candidates else None)
  data={'artist':artist,'album':title(name),'cover':f'https://drive.google.com/uc?export=download&id={cover}' if cover else None}
  entries=[('album',folder,title(name))]+[('track',id,re.sub(r'(?i)\.mp3$','',title(n))) for id,n in tracks]
- return {code(artist,kind,id):dict(data,kind=kind,id=id,title=t) for kind,id,t in entries}
+ return {code(artist,kind,id):dict(data,kind=kind,identity=hashlib.sha256(f'{artist}|{kind}|{id}'.encode()).hexdigest(),title=t) for kind,id,t in entries}
 if __name__=='__main__':
  path=Path(__file__).resolve().parents[1]/'web/catalog.json'
  catalog=json.loads(path.read_text()) if path.exists() else {}
+ # Migrate old snapshots without retaining raw audio or folder identifiers.
+ for entry in catalog.values():
+  if 'id' in entry:
+   entry['identity']=hashlib.sha256((entry['artist']+'|'+entry['kind']+'|'+entry.pop('id')).encode()).hexdigest()
  jobs=[(artist,id,name) for artist,root in ROOTS.items() for id,name,isfolder in listing(root) if isfolder]
  with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
   for entries in pool.map(album_job,jobs):
    for key,entry in entries.items():
-    if key in catalog and any(catalog[key][f]!=entry[f] for f in ['artist','kind','id']): raise ValueError('Short code collision')
+    if key in catalog and any(catalog[key][f]!=entry[f] for f in ['artist','kind','identity']): raise ValueError('Short code collision')
     catalog[key]=entry
  temp=path.with_suffix('.tmp');temp.write_text(json.dumps(catalog,ensure_ascii=False,sort_keys=True,separators=(',',':')));temp.replace(path)
  print(f'Share catalog: {len(catalog)} entries (old codes retained).')
