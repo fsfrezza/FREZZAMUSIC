@@ -165,6 +165,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var catalogLoaded by remember { mutableStateOf(false) }
     val liveCatalog = remember { LiveDriveCatalog(context) }
     var catalogStatus by remember { mutableStateOf(liveCatalog.status()) }
     var automaticCatalogCheck by remember { mutableStateOf(settings.autoCatalogCheck) }
@@ -206,7 +207,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
             if (metadata.pending().isNotEmpty()) showConflictNotice = true
         } catch (error: kotlinx.coroutines.CancellationException) { throw error }
         catch (_: Exception) { catalogStatus = "A atualização não foi concluída. Tente novamente." }
-        finally { loading = false }
+        finally { loading = false; catalogLoaded = true }
     }
 
     LaunchedEffect(Unit) { refreshLibrary(online = !liveCatalog.hasCatalog(BuildConfig.ARTIST_FILTER)) }
@@ -256,7 +257,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
 
     var sharedTrack by remember { mutableStateOf<Track?>(null) }
     var linkError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(sharedUri, visibleArtists, loading) {
+    LaunchedEffect(sharedUri, visibleArtists, loading, catalogLoaded) {
         val uri = sharedUri ?: return@LaunchedEffect
         val target = SharedContent.parse(uri)
         if (target == null) {
@@ -265,7 +266,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
         } else if (BuildConfig.ARTIST_FILTER.isNotBlank() && !BuildConfig.ARTIST_FILTER.equals(target.artist, true)) {
             linkError = "Este conteúdo pertence a outro projeto. Abra o link no FREZZAMUSIC ou no aplicativo da banda."
             consumeSharedUri()
-        } else if (!loading && visibleArtists.isNotEmpty()) {
+        } else if (!loading && catalogLoaded) {
             val albums = visibleArtists.filter { it.name.equals(target.artist, true) }.flatMap { it.albums }
             val found = albums.firstOrNull { a ->
                 if (target.kind == "album") a.tracks.any { it.folder == target.id }
