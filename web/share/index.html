@@ -1,6 +1,6 @@
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Ouvir no aplicativo — FREZZAMUSIC</title><style>
 *{box-sizing:border-box}body{margin:0;background:#101116;color:#f1f1f5;font:17px/1.6 system-ui,sans-serif}main{max-width:560px;margin:5vh auto;padding:28px}img{width:260px;max-width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;display:block;margin:24px auto}h1{line-height:1.2}small,p{color:#c7c8d2}a{display:block;text-align:center;padding:13px;margin:12px 0;border:1px solid #777;border-radius:10px;color:inherit;text-decoration:none}.primary{background:#dfbc61;color:#18130c;border:0;font-weight:700}[hidden]{display:none!important}footer{margin-top:32px;font-size:14px}
-</style></head><body><main><small id="brand">FREZZAMUSIC</small><img id="cover" hidden alt="Capa do álbum"><h1 id="title">Ouça no aplicativo</h1><p id="detail"></p><section id="actions" hidden><a class="primary" id="bandOpen">Abrir no app da banda</a><a id="mainOpen">Abrir no FREZZAMUSIC</a></section><p id="status" role="status"></p><h2>Precisa do aplicativo?</h2><a id="bandDownload" hidden>Baixar aplicativo da banda</a><a href="https://drive.google.com/file/d/12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy/view?usp=drivesdk">Baixar FREZZAMUSIC</a><p>Depois de instalar ou atualizar, volte a esta página e toque em <strong>Abrir</strong>. Requer uma versão com suporte a links compartilhados (0.23.1 ou posterior).</p><footer>Android · Streaming precisa de internet. Se o navegador não abrir o app, tente abrir este link no Chrome.<p><a href="https://solasias.blogspot.com/p/app.html">Sobre o aplicativo SOLASIAS</a></p></footer></main><script>
+</style></head><body><main><small id="brand">FREZZAMUSIC</small><img id="cover" hidden alt="Capa do álbum"><h1 id="title">Ouça no aplicativo</h1><p id="detail"></p><section id="actions" hidden><a class="primary" id="openContent">Abrir no aplicativo</a></section><p id="status" role="status"></p><h2>Precisa do aplicativo?</h2><a href="https://drive.google.com/file/d/12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy/view?usp=drivesdk">Baixar FREZZAMUSIC</a><a id="bandDownload" hidden>Baixar aplicativo da banda</a><p>Depois de instalar ou atualizar, volte a esta página e toque em <strong>Abrir</strong>. Use a versão mais recente dos aplicativos para abrir o conteúdo com essa prioridade.</p><footer>Android · O link prioriza o FREZZAMUSIC e usa o app da banda como alternativa. Streaming precisa de internet. Se o navegador não abrir o app, tente abrir este link no Chrome.<p><a href="https://solasias.blogspot.com/p/app.html">Sobre o aplicativo SOLASIAS</a></p></footer></main><script>
 'use strict';
 const q=new URLSearchParams(location.search),code=q.get('c');
 const validCode=!!code&&/^[sf][at][A-Za-z0-9_-]{16}$/.test(code)&&[...q].length===1;
@@ -15,13 +15,26 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
  el('detail').textContent=band.name+(kind==='track'&&q.get('album')?' • '+q.get('album').slice(0,240):'');
  document.title=el('title').textContent+' — '+band.name;
  try{const cover=new URL(q.get('cover'));if(cover.protocol==='https:'&&cover.hostname==='drive.google.com'&&cover.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(cover.searchParams.get('id')||'')){el('cover').src=cover.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
- function setButtons(payload){
- for(const [button,pkg] of [['bandOpen',band.pkg],['mainOpen','com.frezzamusic.app']]){
-  el(button).href='intent://open?'+payload+'#Intent;scheme=frezzamusic;package='+pkg+';S.browser_fallback_url='+encodeURIComponent(location.href)+';end';
+ const payload=new URLSearchParams(validCode?{c:code}:{artist,kind,id}).toString();
+ const stage=location.hash==='#fm-band'?'band':location.hash==='#fm-downloads'?'downloads':'main';
+ function fallback(hash){const url=new URL(location.href);url.hash=hash;return url.href;}
+ const mainIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package=com.frezzamusic.app;S.browser_fallback_url='+encodeURIComponent(fallback('fm-band'))+';end';
+ const bandIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package='+band.pkg+';S.browser_fallback_url='+encodeURIComponent(fallback('fm-downloads'))+';end';
+ // Explicit packages avoid the chooser. Native band apps also prefer FREZZAMUSIC.
+ const intent=stage==='main'?mainIntent:bandIntent;
+ el('openContent').href=intent;
+ el('openContent').textContent=kind==='album'?'Abrir álbum':'Abrir música';
+ el('openContent').addEventListener('click',()=>{el('status').textContent='Abrindo o conteúdo no aplicativo…';});
+ if(stage==='downloads')el('status').textContent='Não foi possível abrir automaticamente. Toque em Abrir ou baixe um dos aplicativos abaixo.';
+ else if(/Android/i.test(navigator.userAgent)){
+  el('status').textContent='Tentando abrir no aplicativo…';
+  const guard='fm-open:'+payload+':'+stage;
+  let attempt=true;
+  try{const last=Number(sessionStorage.getItem(guard)||0);attempt=Date.now()-last>15000;if(attempt)sessionStorage.setItem(guard,String(Date.now()));}catch{}
+  if(attempt&&document.visibilityState!=='hidden'){
+   try{location.replace(intent);}catch{el('status').textContent='Toque em Abrir para continuar no aplicativo.';}
+  }
  }
- }
- setButtons(new URLSearchParams(validCode?{c:code}:{artist,kind,id}).toString());
- for(const button of ['bandOpen','mainOpen'])el(button).addEventListener('click',()=>{el('status').textContent='Se o aplicativo não abrir, instale ou atualize pelos botões abaixo e tente novamente.';});
  if(validCode)fetch('../catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(catalog=>{
   const entry=Object.hasOwn(catalog,code)?catalog[code]:null;
   if(!entry||entry.artist!==artist||entry.kind!==kind)return;
@@ -30,6 +43,6 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
   document.title=el('title').textContent+' — '+band.name;
   try{const image=new URL(entry.cover);if(image.protocol==='https:'&&image.hostname==='drive.google.com'&&image.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(image.searchParams.get('id')||'')){el('cover').src=image.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
  }).catch(()=>{});
- el('bandOpen').textContent='Abrir no '+band.name;el('actions').hidden=false;
+ el('actions').hidden=false;
 }else{el('status').textContent='Escolha um aplicativo abaixo. Para abrir uma música ou álbum específico, use o link compartilhado pelo app.';}
 </script></body></html>

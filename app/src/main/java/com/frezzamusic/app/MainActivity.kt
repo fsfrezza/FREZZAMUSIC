@@ -1,5 +1,6 @@
 package com.frezzamusic.app
 
+import com.frezzamusic.app.links.SharedLinkRouter
 import com.frezzamusic.app.links.SharedContent
 import android.content.Intent
 import android.net.Uri
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (SharedLinkRouter.forward(this, intent.data)) { finish(); return }
         sharedUri = intent.data
     }
 
@@ -91,6 +93,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (SharedLinkRouter.forward(this, intent?.data)) { finish(); return }
         sharedUri = intent?.data
         folders = FolderMusicRepository(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
