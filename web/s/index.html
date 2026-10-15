@@ -16,23 +16,25 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
  document.title=el('title').textContent+' — '+band.name;
  try{const cover=new URL(q.get('cover'));if(cover.protocol==='https:'&&cover.hostname==='drive.google.com'&&cover.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(cover.searchParams.get('id')||'')){el('cover').src=cover.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
  const payload=new URLSearchParams(validCode?{c:code}:{artist,kind,id}).toString();
- const stage=location.hash==='#fm-band'?'band':location.hash==='#fm-downloads'?'downloads':'main';
+ const stage=location.hash==='#fm-band'?'band':location.hash==='#fm-band-manual'?'band-manual':location.hash==='#fm-downloads'?'downloads':'main';
  function fallback(hash){const url=new URL(location.href);url.hash=hash;return url.href;}
  const mainIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package=com.frezzamusic.app;S.browser_fallback_url='+encodeURIComponent(fallback('fm-band'))+';end';
  const bandIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package='+band.pkg+';S.browser_fallback_url='+encodeURIComponent(fallback('fm-downloads'))+';end';
  // Explicit packages avoid the chooser. Native band apps also prefer FREZZAMUSIC.
- const intent=stage==='main'?mainIntent:bandIntent;
- el('openContent').href=intent;
+ const manualMainIntent=mainIntent.replace(encodeURIComponent(fallback('fm-band')),encodeURIComponent(fallback('fm-band-manual')));
+ const automaticIntent=stage==='main'?mainIntent:bandIntent;
+ el('openContent').href=stage==='band'||stage==='band-manual'?bandIntent:manualMainIntent;
  el('openContent').textContent=kind==='album'?'Abrir álbum':'Abrir música';
  el('openContent').addEventListener('click',()=>{el('status').textContent='Abrindo o conteúdo no aplicativo…';});
  if(stage==='downloads')el('status').textContent='Não foi possível abrir automaticamente. Toque em Abrir ou baixe um dos aplicativos abaixo.';
+ else if(stage==='band-manual')el('status').textContent='Toque em Abrir para tentar o aplicativo da banda ou use os downloads abaixo.';
  else if(/Android/i.test(navigator.userAgent)){
   el('status').textContent='Tentando abrir no aplicativo…';
   const guard='fm-open:'+payload+':'+stage;
   let attempt=true;
   try{const last=Number(sessionStorage.getItem(guard)||0);attempt=Date.now()-last>15000;if(attempt)sessionStorage.setItem(guard,String(Date.now()));}catch{}
   if(attempt&&document.visibilityState!=='hidden'){
-   try{location.replace(intent);}catch{el('status').textContent='Toque em Abrir para continuar no aplicativo.';}
+   try{location.replace(automaticIntent);}catch{el('status').textContent='Toque em Abrir para continuar no aplicativo.';}
   }
  }
  if(validCode)fetch('../catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(catalog=>{
