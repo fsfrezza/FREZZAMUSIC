@@ -1,5 +1,6 @@
 package com.frezzamusic.app
 
+import com.frezzamusic.app.links.SharedContent
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -48,6 +49,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
+    private var sharedUri by mutableStateOf<Uri?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sharedUri = intent.data
+    }
+
     private lateinit var folders: FolderMusicRepository
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var mediaPermissionResult: ((Boolean) -> Unit)? = null
@@ -82,12 +91,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedUri = intent?.data
         folders = FolderMusicRepository(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         setContent {
             FrezzaTheme {
                 FrezzaMusicApp(
                     repo = folders,
+                    sharedUri = sharedUri,
+                    consumeSharedUri = { sharedUri = null },
                     requestFolderWrite = { track, callback ->
                         val target = Uri.parse(track.uri)
                         val matching = folders.folders().firstOrNull { tree ->
@@ -116,7 +128,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUri: () -> Unit, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val metadata = remember { MetadataConflictRepository(context) }
@@ -241,6 +253,47 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     val allTracks = visibleLocalTracks + remoteTracks
     val controller = playback.controller
     val currentTrack = allTracks.find { it.id == controller?.currentMediaItem?.mediaId }
+
+    var sharedTrack by remember { mutableStateOf<Track?>(null) }
+    var linkError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sharedUri, visibleArtists, loading) {
+        val uri = sharedUri ?: return@LaunchedEffect
+        val target = SharedContent.parse(uri)
+        if (target == null) {
+            linkError = "Link de música ou álbum inválido."
+            consumeSharedUri()
+        } else if (BuildConfig.ARTIST_FILTER.isNotBlank() && !BuildConfig.ARTIST_FILTER.equals(target.artist, true)) {
+            linkError = "Este conteúdo pertence a outro projeto. Abra o link no FREZZAMUSIC ou no aplicativo da banda."
+            consumeSharedUri()
+        } else if (!loading && visibleArtists.isNotEmpty()) {
+            val albums = visibleArtists.filter { it.name.equals(target.artist, true) }.flatMap { it.albums }
+            val found = albums.firstOrNull { a ->
+                if (target.kind == "album") a.tracks.any { it.folder == target.id }
+                else a.tracks.any { it.remoteFileId == target.id }
+            }
+            if (found != null) {
+                tab = AppTab.ONLINE
+                playerExpanded = false
+                selectedAlbum = found
+                sharedTrack = if (target.kind == "track") found.tracks.first { it.remoteFileId == target.id } else null
+            } else linkError = "Conteúdo não encontrado. Atualize a biblioteca e abra o link novamente."
+            consumeSharedUri()
+        }
+    }
+    if (sharedTrack != null) {
+        val track = sharedTrack!!
+        AlertDialog(onDismissRequest = { sharedTrack = null }, title = { Text(track.title) },
+            text = { Text(track.artist + " • " + track.album) },
+            confirmButton = { TextButton(enabled = controller != null, onClick = {
+                playback.play(track, selectedAlbum?.tracks ?: listOf(track))
+                fullPlayerPage = 0; playerExpanded = true; sharedTrack = null
+            }) { Text("Ouvir música") } },
+            dismissButton = { TextButton(onClick = { sharedTrack = null }) { Text("Ver álbum") } })
+    }
+    if (linkError != null) AlertDialog(onDismissRequest = { linkError = null },
+        title = { Text("Link compartilhado") }, text = { Text(linkError!!) },
+        confirmButton = { TextButton(onClick = { linkError = null; refreshAll() }) { Text("Atualizar biblioteca") } },
+        dismissButton = { TextButton(onClick = { linkError = null }) { Text("Fechar") } })
 
     Scaffold(
         bottomBar = {
@@ -539,11 +592,12 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
 }
 @Composable
 private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository, downloads: OfflineDownloadRepository, buy: (Track?, Album?) -> Unit, refresh: () -> Unit, refreshing: Boolean, catalogStatus: String) {
+ val shareContext = androidx.compose.ui.platform.LocalContext.current
  val favorites=rememberFavorites(user)
 
  val allAlbums=artists.flatMap{it.albums}; val tracks=allAlbums.flatMap{it.tracks}; var mode by remember{mutableStateOf("Álbuns")};var query by remember{mutableStateOf("")};var artistFilter by remember{mutableStateOf("Todas")};var artistMenu by remember{mutableStateOf(false)};var sort by remember{mutableStateOf("Título")};var ascending by remember{mutableStateOf(true)};var sortMenu by remember{mutableStateOf(false)}
  val artistOptions=listOf("Todas")+artists.map{it.name}.sorted()
- if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,favorites.contains(t.id),{play(t,album)},{user.toggleFavorite(t)},downloads,{buy(t,album)})}}
+ if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist);SharedContent.albumUrl(album)?.let { link -> TextButton(onClick = { SharedContent.share(shareContext, album.artist + " — " + album.title, link) }) { Icon(Icons.Default.Share, null); Text(" Compartilhar álbum") } }};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,favorites.contains(t.id),{play(t,album)},{user.toggleFavorite(t)},downloads,{buy(t,album)})}}
  else Column{
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
    Text(catalogStatus, Modifier.weight(1f), style=MaterialTheme.typography.bodySmall)
@@ -682,6 +736,7 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
 
 @Composable
 private fun OnlineTrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFavorite: () -> Unit, downloads: OfflineDownloadRepository, buy: () -> Unit) {
+    val shareContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember(track.id) { mutableStateOf(downloads.state(track)) }
     var error by remember(track.id) { mutableStateOf<String?>(null) }
@@ -691,6 +746,7 @@ private fun OnlineTrackRow(track: Track, favorite: Boolean, play: () -> Unit, to
         leadingContent = { if (!track.artwork.isNullOrBlank()) AsyncImage(model=track.artwork,contentDescription=null,modifier=Modifier.size(48.dp),contentScale=ContentScale.Crop) else Icon(Icons.Default.Cloud, null) },
         trailingContent = {
             Row {
+                SharedContent.trackUrl(track)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, track.artist + " — " + track.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } }
                 IconButton(onClick = buy) { Icon(Icons.Default.Download, "Opções de download") }
                 IconButton(onClick = toggleFavorite) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null) }
             }
