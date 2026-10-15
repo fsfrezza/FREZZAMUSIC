@@ -1,6 +1,7 @@
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Ouvir no aplicativo — FREZZAMUSIC</title><style>
 *{box-sizing:border-box}body{margin:0;background:#101116;color:#f1f1f5;font:17px/1.6 system-ui,sans-serif}main{max-width:560px;margin:5vh auto;padding:28px}img{width:260px;max-width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;display:block;margin:24px auto}h1{line-height:1.2}small,p{color:#c7c8d2}a{display:block;text-align:center;padding:13px;margin:12px 0;border:1px solid #777;border-radius:10px;color:inherit;text-decoration:none}.primary{background:#dfbc61;color:#18130c;border:0;font-weight:700}[hidden]{display:none!important}footer{margin-top:32px;font-size:14px}
-</style></head><body><main><small id="brand">FREZZAMUSIC</small><img id="cover" hidden alt="Capa do álbum"><h1 id="title">Ouça no aplicativo</h1><p id="detail"></p><section id="actions" hidden><a class="primary" id="openContent">Abrir no aplicativo</a></section><p id="status" role="status"></p><h2>Precisa do aplicativo?</h2><a href="https://drive.google.com/file/d/12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy/view?usp=drivesdk">Baixar FREZZAMUSIC</a><a id="bandDownload" hidden>Baixar aplicativo da banda</a><p>Depois de instalar ou atualizar, volte a esta página e toque em <strong>Abrir</strong>. Use a versão mais recente dos aplicativos para abrir o conteúdo com essa prioridade.</p><footer>Android · O link prioriza o FREZZAMUSIC e usa o app da banda como alternativa. Streaming precisa de internet. Se o navegador não abrir o app, tente abrir este link no Chrome.<p><a href="https://solasias.blogspot.com/p/app.html">Sobre o aplicativo SOLASIAS</a></p></footer></main><script>
+#status{padding:18px;border:1px solid #dfbc61;border-radius:12px;background:#272318;color:#fff;font-weight:600;min-height:64px}#status.busy:before{content:"";display:inline-block;width:18px;height:18px;margin-right:10px;border:3px solid #777;border-top-color:#dfbc61;border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle}@keyframes spin{to{transform:rotate(360deg)}}#player{padding:20px;background:#1d2029;border-radius:16px;margin:24px 0}audio{width:100%;margin:12px 0}button{padding:12px;border:1px solid #dfbc61;border-radius:8px;background:transparent;color:#fff;font:inherit;cursor:pointer}#player h2{margin-top:0;font-size:22px}@media(prefers-reduced-motion:reduce){#status.busy:before{animation:none}}
+</style></head><body><main><small id="brand">FREZZAMUSIC</small><img id="cover" hidden alt="Capa do álbum"><h1 id="title">Ouça no aplicativo</h1><p id="detail"></p><section id="actions" hidden><a class="primary" id="openContent">Abrir no aplicativo</a></section><p id="status" role="status"></p><section id="player" hidden aria-label="Reprodutor no navegador"><h2>Ouça aqui</h2><p id="previewTitle"></p><audio id="audio" controls preload="none" controlslist="nodownload" aria-label="Reproduzir música compartilhada"></audio><p id="playerStatus" role="status">Toque no botão de reprodução para ouvir.</p><button id="retryAudio" hidden>Tentar novamente</button><small>Uma reprodução de apresentação neste navegador.</small></section><h2>Ouça todas as músicas gratuitamente</h2><p>Baixe o FREZZAMUSIC ou o aplicativo da banda para continuar ouvindo.</p><a href="https://drive.google.com/file/d/12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy/view?usp=drivesdk">Baixar FREZZAMUSIC</a><a id="bandDownload" hidden>Baixar aplicativo da banda</a><p>Depois de instalar ou atualizar, volte a esta página e toque em <strong>Abrir</strong>. Use a versão mais recente dos aplicativos para abrir o conteúdo com essa prioridade.</p><footer>Android · O link prioriza o FREZZAMUSIC e usa o app da banda como alternativa. Streaming precisa de internet. Se o navegador não abrir o app, tente abrir este link no Chrome.<p><a href="https://solasias.blogspot.com/p/app.html">Sobre o aplicativo SOLASIAS</a></p></footer></main><script>
 'use strict';
 const q=new URLSearchParams(location.search),code=q.get('c');
 const validCode=!!code&&/^[sf][at][A-Za-z0-9_-]{16}$/.test(code)&&[...q].length===1;
@@ -25,11 +26,17 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
  const automaticIntent=stage==='main'?mainIntent:bandIntent;
  el('openContent').href=stage==='band'||stage==='band-manual'?bandIntent:manualMainIntent;
  el('openContent').textContent=kind==='album'?'Abrir álbum':'Abrir música';
- el('openContent').addEventListener('click',()=>{el('status').textContent='Abrindo o conteúdo no aplicativo…';});
+ let appTimer;
+ function finishApp(){clearTimeout(appTimer);el('status').classList.remove('busy');el('status').textContent='Continue ouvindo nesta página ou abra o conteúdo no aplicativo.';}
+ function attempting(){clearTimeout(appTimer);el('status').classList.add('busy');el('status').textContent='Tentando abrir o aplicativo… Aguarde um instante.';appTimer=setTimeout(finishApp,2500);}
+ el('openContent').addEventListener('click',attempting);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')finishApp();else clearTimeout(appTimer);});
+ window.addEventListener('pageshow',finishApp);
+ finishApp();
  if(stage==='downloads')el('status').textContent='Não foi possível abrir automaticamente. Toque em Abrir ou baixe um dos aplicativos abaixo.';
  else if(stage==='band-manual')el('status').textContent='Toque em Abrir para tentar o aplicativo da banda ou use os downloads abaixo.';
  else if(/Android/i.test(navigator.userAgent)){
-  el('status').textContent='Tentando abrir no aplicativo…';
+  attempting();
   const guard='fm-open:'+payload+':'+stage;
   let attempt=true;
   try{const last=Number(sessionStorage.getItem(guard)||0);attempt=Date.now()-last>15000;if(attempt)sessionStorage.setItem(guard,String(Date.now()));}catch{}
@@ -46,5 +53,36 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
   try{const image=new URL(entry.cover);if(image.protocol==='https:'&&image.hostname==='drive.google.com'&&image.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(image.searchParams.get('id')||'')){el('cover').src=image.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
  }).catch(()=>{});
  el('actions').hidden=false;
+ async function loadPreview(){
+  el('player').hidden=false;
+  const audio=el('audio'),ps=el('playerStatus'),retry=el('retryAudio');
+  let loadingTimer,completed=false,src,storageKey;
+  function message(text,busy=false){ps.textContent=text;ps.setAttribute('aria-busy',String(busy));}
+  function fail(){clearTimeout(loadingTimer);message('Não foi possível carregar o áudio. Tente novamente ou ouça pelo aplicativo.');retry.hidden=false;}
+  function loading(){if(completed)return;clearTimeout(loadingTimer);message('Carregando o áudio… Aguarde.',true);loadingTimer=setTimeout(()=>{audio.pause();fail();},20000);}
+  try{
+   message('Preparando o reprodutor…',true);
+   let previewCode=code;
+   if(!validCode){const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(artist+'|'+kind+'|'+id)));previewCode=(artist==='solasias'?'s':'f')+(kind==='album'?'a':'t')+btoa(String.fromCharCode(...bytes.slice(0,12))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
+   storageKey='fm-preview-played:'+previewCode;
+   const response=await fetch('../listen/'+previewCode+'.json',{signal:AbortSignal.timeout(15000)});
+   if(!response.ok)throw Error('unavailable');
+   const entry=await response.json(),url=new URL(entry.src);
+   if(url.protocol!=='https:'||url.hostname!=='drive.usercontent.google.com'||url.pathname!=='/download'||!(/^[A-Za-z0-9_-]+$/).test(url.searchParams.get('id')||''))throw Error('invalid audio');
+   src=url.href;el('previewTitle').textContent=(kind==='album'?'Faixa de apresentação do álbum: ':'')+String(entry.title).slice(0,240);
+   try{completed=localStorage.getItem(storageKey)==='1';}catch{}
+   if(completed){audio.hidden=true;message('Você já ouviu esta apresentação. Continue gratuitamente em um dos aplicativos abaixo.');return;}
+   audio.src=src;message('Toque no botão de reprodução para ouvir.');
+   audio.addEventListener('play',loading);
+   audio.addEventListener('waiting',loading);
+   audio.addEventListener('playing',()=>{clearTimeout(loadingTimer);retry.hidden=true;message('Reproduzindo. Você pode pausar e continuar.');});
+   audio.addEventListener('canplay',()=>{clearTimeout(loadingTimer);message(audio.paused?'Pronto para ouvir. Toque em reproduzir.':'Reproduzindo.');});
+   audio.addEventListener('pause',()=>{clearTimeout(loadingTimer);if(!completed&&!audio.error)message('Pausado. Toque em reproduzir para continuar.');});
+   audio.addEventListener('error',fail);
+   audio.addEventListener('ended',()=>{completed=true;clearTimeout(loadingTimer);try{localStorage.setItem(storageKey,'1');}catch{}audio.removeAttribute('src');audio.load();audio.hidden=true;retry.hidden=true;message('Gostou? Ouça todas as músicas gratuitamente no aplicativo.');});
+   retry.onclick=()=>{if(completed)return;retry.hidden=true;audio.src=src;loading();audio.play().catch(()=>{clearTimeout(loadingTimer);message('Toque em reproduzir para ouvir.');});};
+  }catch{fail();retry.onclick=()=>loadPreview();}
+ }
+ loadPreview();
 }else{el('status').textContent='Escolha um aplicativo abaixo. Para abrir uma música ou álbum específico, use o link compartilhado pelo app.';}
 </script></body></html>
