@@ -14,3 +14,8 @@ To enable verification later, serve assetlinks.json at the host root with each p
 
 ## Device acceptance
 Test SOLASIAS only, theFrezza only, FREZZAMUSIC only, both band and main, and neither installed. Exercise links from Chrome and WhatsApp; fresh and running activities; empty/loaded/stale catalog; missing/deleted IDs; offline loading; wrong-band app; consecutive song links; changing sort order. Album opens without starting playback, song requires Listen. No physical-device verification has been performed by this source change.
+
+## Short links (0.23.1)
+All new shares use `/FREZZAMUSIC/s/?c=CODE`. Codes comprise the band/kind prefix plus the first 96 bits of SHA-256 over `artist|kind|Drive ID` in URL-safe base64. Metadata is absent from the URL. This is shortening/obfuscation, not authorization or encryption. Full legacy links still parse. No external shortening service is required.
+
+The app resolves codes against its own current catalog. web/catalog.json supplies public titles/covers and legacy app compatibility; missing entries still offer code-based opening in 0.23.1. The generator refreshes metadata during Pages deployment, keeps old mappings, rejects collisions and writes atomically. On listing failure the committed snapshot remains available. New catalog content can be shared before site metadata refresh, with a generic band/title presentation until redeployment.

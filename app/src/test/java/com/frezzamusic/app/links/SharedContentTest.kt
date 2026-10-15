@@ -19,4 +19,17 @@ class SharedContentTest {
             good.replace("id=ABC", "id=..%2Fprivate"),good.replace("id=ABC", "id=%ZZ"),good+"#fragment",
             good.replace("fsfrezza.github.io", "user@fsfrezza.github.io"))) assertNull(bad, SharedContent.parseUrl(bad))
     }
+    @Test fun shortCodesRoundTripAndKeepIdentity() {
+        val code = SharedContent.shortCode("solasias", "track", "ABC")
+        assertEquals("st-bJHVEeD8uiw94qB", code)
+        val target = SharedContent.parseUrl("https://fsfrezza.github.io/FREZZAMUSIC/s/?c=$code")!!
+        assertTrue(target.short)
+        assertTrue(SharedContent.matches(target, "ABC"))
+        assertFalse(SharedContent.matches(target, "DEF"))
+        assertEquals(target, SharedContent.parseUrl("frezzamusic://open?c=$code"))
+        assertNull(SharedContent.parseUrl("https://fsfrezza.github.io/FREZZAMUSIC/s/?c=$code&id=ABC"))
+        assertNull(SharedContent.parseUrl("https://fsfrezza.github.io/FREZZAMUSIC/s/?c=not-a-code"))
+        assertNotEquals(code, SharedContent.shortCode("thefrezza", "track", "ABC"))
+        assertNotEquals(code, SharedContent.shortCode("solasias", "album", "ABC"))
+    }
 }

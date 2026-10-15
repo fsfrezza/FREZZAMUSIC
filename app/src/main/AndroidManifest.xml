@@ -16,6 +16,12 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="fsfrezza.github.io" android:pathPrefix="/FREZZAMUSIC/s/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="fsfrezza.github.io" android:pathPrefix="/FREZZAMUSIC/share/" />
             </intent-filter>
             <intent-filter>

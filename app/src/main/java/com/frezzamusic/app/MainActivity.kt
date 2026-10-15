@@ -268,15 +268,15 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
             consumeSharedUri()
         } else if (!loading && catalogLoaded) {
             val albums = visibleArtists.filter { it.name.equals(target.artist, true) }.flatMap { it.albums }
-            val found = albums.firstOrNull { a ->
-                if (target.kind == "album") a.tracks.any { it.folder == target.id }
-                else a.tracks.any { it.remoteFileId == target.id }
-            }
+            val found = albums.filter { a ->
+                if (target.kind == "album") a.tracks.any { it.folder?.let { id -> SharedContent.matches(target, id) } == true }
+                else a.tracks.any { it.remoteFileId?.let { id -> SharedContent.matches(target, id) } == true }
+            }.singleOrNull()
             if (found != null) {
                 tab = AppTab.ONLINE
                 playerExpanded = false
                 selectedAlbum = found
-                sharedTrack = if (target.kind == "track") found.tracks.first { it.remoteFileId == target.id } else null
+                sharedTrack = if (target.kind == "track") found.tracks.first { it.remoteFileId?.let { id -> SharedContent.matches(target, id) } == true } else null
             } else linkError = "Conteúdo não encontrado. Atualize a biblioteca e abra o link novamente."
             consumeSharedUri()
         }
