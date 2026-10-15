@@ -9,6 +9,8 @@ for flavor in ['frezzamusic','solasias','thefrezza']:
  assert apk.is_file(),str(apk)
  badging=subprocess.check_output([str(aapt),'dump','badging',str(apk)],text=True)
  assert 'application-debuggable' not in badging,'Release APK is debuggable'
+ manifest=subprocess.check_output([str(aapt),'dump','xmltree',str(apk),'AndroidManifest.xml'],text=True)
+ assert ('fsfrezza.github.io' in manifest)==(flavor=='frezzamusic'),'Only FREZZAMUSIC should claim shared web links'
  mapping=Path(f'app/build/outputs/mapping/{flavor}Release/mapping.txt')
  assert mapping.is_file() and mapping.stat().st_size>100,'Missing R8 mapping'
  assert any('com.frezzamusic.app.data.LiveDriveCatalog -> ' in x and not x.endswith('LiveDriveCatalog:') for x in mapping.read_text().splitlines()),'Catalog class was not obfuscated'

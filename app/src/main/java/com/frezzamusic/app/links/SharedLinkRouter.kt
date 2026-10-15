@@ -14,6 +14,10 @@ object SharedLinkRouter {
 
     fun forward(context: Context, uri: Uri?): Boolean {
         val target = SharedContent.parse(uri) ?: return false
+        val routedUri = Uri.Builder().scheme("frezzamusic").authority("open").apply {
+            if (target.short) appendQueryParameter("c", target.id)
+            else { appendQueryParameter("artist", target.artist); appendQueryParameter("kind", target.kind); appendQueryParameter("id", target.id) }
+        }.build()
         return dispatch(target, context.packageName, canOpen = { pkg ->
             try {
                 val info = context.packageManager.getPackageInfo(pkg, 0)
@@ -22,7 +26,7 @@ object SharedLinkRouter {
             } catch (_: android.content.pm.PackageManager.NameNotFoundException) { false }
         }, launch = { pkg ->
             try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+                context.startActivity(Intent(Intent.ACTION_VIEW, routedUri).apply {
                     setPackage(pkg)
                     addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 })
