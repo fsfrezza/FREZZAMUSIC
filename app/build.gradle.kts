@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 34
-        versionName = "0.22.9"
+        versionCode = 39
+        versionName = "0.23.4"
         buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
@@ -45,6 +45,26 @@ android {
             buildConfigField("String", "ARTIST_FILTER", "\"theFrezza\"")
         }
     }
+    // Signing material comes from the environment, never from this public repository.
+    val releaseStore = providers.environmentVariable("FREZZAMUSIC_KEYSTORE_PATH").orNull
+    signingConfigs {
+        if (releaseStore != null) create("production") {
+            storeFile = file(releaseStore)
+            storePassword = providers.environmentVariable("FREZZAMUSIC_KEYSTORE_PASSWORD").get()
+            keyAlias = providers.environmentVariable("FREZZAMUSIC_KEY_ALIAS").get()
+            keyPassword = providers.environmentVariable("FREZZAMUSIC_KEY_PASSWORD").get()
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+            isJniDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("production")
+        }
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -60,6 +80,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
     implementation(platform("androidx.compose:compose-bom:2025.01.00"))
     implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("com.mpatric:mp3agic:0.9.1")
     implementation("androidx.compose.material3:material3")
