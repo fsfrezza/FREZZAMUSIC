@@ -190,6 +190,41 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
         onDispose { playback.release() }
     }
 
+    val appUpdates = remember { AppUpdateRepository() }
+    var pendingAppUpdate by remember { mutableStateOf<AppRelease?>(null) }
+    var checkingAppUpdate by remember { mutableStateOf(false) }
+    var appUpdateStatus by remember { mutableStateOf("") }
+    var offeredAppVersion by remember { mutableIntStateOf(0) }
+    suspend fun checkAppUpdate(manual: Boolean = false) {
+        if (checkingAppUpdate) return
+        checkingAppUpdate = true
+        if (manual) appUpdateStatus = "Verificando nova versão…"
+        try {
+            val release = appUpdates.check(BuildConfig.APPLICATION_ID, BuildConfig.VERSION_CODE)
+            appUpdateStatus = if (release == null) "Você está usando a versão mais recente." else "Versão ${release.versionName} disponível."
+            if (release != null && (manual || release.versionCode != offeredAppVersion)) {
+                offeredAppVersion = release.versionCode
+                pendingAppUpdate = release
+            }
+        } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (_: Exception) { if (manual) appUpdateStatus = "Não foi possível verificar. Confira a conexão e tente novamente." }
+        finally { checkingAppUpdate = false }
+    }
+    val checkAppUpdateManually: () -> Unit = { editScope.launch { checkAppUpdate(manual = true) }; Unit }
+    pendingAppUpdate?.let { release ->
+        AlertDialog(onDismissRequest = { pendingAppUpdate = null },
+            title = { Text("Nova versão disponível") },
+            text = { Text("A versão ${release.versionName} está disponível. Deseja baixar e atualizar? O Android pedirá sua confirmação para instalar. Suas músicas e configurações serão mantidas na atualização.") },
+            confirmButton = { TextButton(onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl)))
+                    pendingAppUpdate = null
+                    appUpdateStatus = "Após baixar o APK, abra o arquivo e confirme a atualização no Android."
+                } catch (_: Exception) { appUpdateStatus = "Não foi possível abrir o download. Tente novamente."; pendingAppUpdate = null }
+            }) { Text("Atualizar") } },
+            dismissButton = { TextButton(onClick = { pendingAppUpdate = null }) { Text("Depois") } })
+    }
+
     suspend fun refreshLibrary(online: Boolean = false) {
         if (loading || checkingCatalog) return
         loading = true
@@ -217,13 +252,14 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
     LaunchedEffect(changeCounter) {
         if (changeCounter > 0) refreshLibrary()
     }
-    val refreshAll: () -> Unit = { pendingCatalog = null; editScope.launch { refreshLibrary(online = true) }; Unit }
+    val refreshAll: () -> Unit = { pendingCatalog = null; editScope.launch { checkAppUpdate() }; editScope.launch { refreshLibrary(online = true) }; Unit }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, automaticCatalogCheck) {
         if (!automaticCatalogCheck) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             CatalogAutoCheck.afterOpen {
+                launch { checkAppUpdate() }
                 // A new foreground session restarts the 30-second timer. Never run alongside a refresh.
                 while (loading) kotlinx.coroutines.delay(250)
                 if (pendingCatalog == null) {
@@ -338,9 +374,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
                 AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
                 AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled })
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled }, checkAppUpdate = checkAppUpdateManually, checkingAppUpdate = checkingAppUpdate, appUpdateStatus = appUpdateStatus)
             }
-            pendingCatalog?.let { preview ->
+            pendingCatalog?.takeIf { pendingAppUpdate == null }?.let { preview ->
                 AlertDialog(
                     onDismissRequest = { pendingCatalog = null; catalogStatus = "Atualização adiada. Sua biblioteca foi mantida." },
                     title = { Text("Atualizar a biblioteca?") },
@@ -390,7 +426,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
                     MetadataConflictReview(metadata, onClose = { showConflictReview = false }, onApplied = { metadataRevision++ })
                 }
             }
-            if (showConflictNotice && !showConflictReview) AlertDialog(
+            if (showConflictNotice && !showConflictReview && pendingAppUpdate == null && pendingCatalog == null) AlertDialog(
                 onDismissRequest = { showConflictNotice = false },
                 title = { Text("Alterações encontradas") },
                 text = { Text("Existem "+metadata.pending().size+" divergências entre suas edições e as fontes. Suas edições foram preservadas.") },
@@ -676,7 +712,7 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit, checkAppUpdate: () -> Unit, checkingAppUpdate: Boolean, appUpdateStatus: String) {
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -701,9 +737,17 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
         item {
             ListItem(
                 headlineContent = { Text("Verificar atualizações automaticamente") },
-                supportingContent = { Text("Após 30 segundos ao abrir o app. A biblioteca só muda com sua confirmação.") },
+                supportingContent = { Text("Após 30 segundos ao abrir o app, verifica músicas, álbuns e uma nova versão do aplicativo. Alterações precisam da sua confirmação.") },
                 trailingContent = { Switch(checked = automaticCheck, onCheckedChange = setAutomaticCheck) }
             )
+        }
+        item {
+            Text("Atualização do aplicativo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Versão instalada: ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+            if (appUpdateStatus.isNotBlank()) Text(appUpdateStatus, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = checkAppUpdate, enabled = !checkingAppUpdate) {
+                Text(if (checkingAppUpdate) "Verificando…" else "Verificar atualização do app")
+            }
         }
         items(folders, key = { it.toString() }) { uri ->
             ListItem(
