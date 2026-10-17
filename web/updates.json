@@ -2,18 +2,18 @@
   "schema": 1,
   "apps": {
     "com.frezzamusic.app": {
-      "versionCode": 38,
-      "versionName": "0.23.3",
+      "versionCode": 39,
+      "versionName": "0.23.4",
       "driveFileId": "12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy"
     },
     "com.frezzamusic.solasias": {
-      "versionCode": 38,
-      "versionName": "0.23.3",
+      "versionCode": 39,
+      "versionName": "0.23.4",
       "driveFileId": "1Twe3W6NzPupDzILpC9a39x0gHn-uz8uH"
     },
     "com.frezzamusic.thefrezza": {
-      "versionCode": 38,
-      "versionName": "0.23.3",
+      "versionCode": 39,
+      "versionName": "0.23.4",
       "driveFileId": "1Xu0WLm_wW03LDzmRCzI47Miuvu8Er7HX"
     }
   }
