@@ -1,0 +1,103 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Ouvir no aplicativo — FREZZAMUSIC</title><style>
+*{box-sizing:border-box}body{margin:0;background:#101116;color:#f1f1f5;font:17px/1.6 system-ui,sans-serif}main{max-width:560px;margin:5vh auto;padding:28px}img{width:260px;max-width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;display:block;margin:24px auto}h1{line-height:1.2}small,p{color:#c7c8d2}a{display:block;text-align:center;padding:13px;margin:12px 0;border:1px solid #777;border-radius:10px;color:inherit;text-decoration:none}.primary{background:#dfbc61;color:#18130c;border:0;font-weight:700}[hidden]{display:none!important}footer{margin-top:32px;font-size:14px}
+#status{padding:18px;border:1px solid #dfbc61;border-radius:12px;background:#272318;color:#fff;font-weight:600;min-height:64px}#playerStatus[aria-busy="true"]:before,#status.busy:before{content:"";display:inline-block;width:18px;height:18px;margin-right:10px;border:3px solid #777;border-top-color:#dfbc61;border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle}@keyframes spin{to{transform:rotate(360deg)}}#player{padding:20px;background:#1d2029;border-radius:16px;margin:24px 0}audio{width:100%;margin:12px 0}button{display:block;margin:12px 0}#player small{display:block}button{padding:12px;border:1px solid #dfbc61;border-radius:8px;background:transparent;color:#fff;font:inherit;cursor:pointer}#player h2{margin-top:0;font-size:22px}@media(prefers-reduced-motion:reduce){#playerStatus[aria-busy="true"]:before,#status.busy:before{animation:none}}
+</style></head><body><main><small id="brand">FREZZAMUSIC</small><img id="cover" hidden alt="Capa do álbum"><h1 id="title">Ouça no aplicativo</h1><p id="detail"></p><section id="actions" hidden><a class="primary" id="openContent">Abrir no aplicativo</a></section><p id="status" role="status"></p><section id="player" hidden aria-label="Reprodutor no navegador"><h2>Ouça aqui</h2><p id="previewTitle"></p><button id="startAudio" class="primary" hidden>Ouvir música</button><audio id="audio" controls crossorigin="anonymous" preload="none" controlslist="nodownload" aria-label="Reproduzir música compartilhada"></audio><p id="playerStatus" role="status">Toque no botão de reprodução para ouvir.</p><button id="retryAudio" hidden>Tentar novamente</button><small>Uma reprodução de apresentação neste navegador.</small></section><h2>Ouça todas as músicas gratuitamente</h2><p>Baixe o FREZZAMUSIC ou o aplicativo da banda para continuar ouvindo.</p><a href="https://drive.google.com/file/d/12yj7dPXNeKuB_tYGOaA_2jg5eHIAxWzy/view?usp=drivesdk">Baixar FREZZAMUSIC</a><a id="bandDownload" hidden>Baixar aplicativo da banda</a><p>Depois de instalar ou atualizar, volte a esta página e toque em <strong>Abrir</strong>. Use a versão mais recente dos aplicativos para abrir o conteúdo com essa prioridade.</p><footer>Android · O link prioriza o FREZZAMUSIC e usa o app da banda como alternativa. Streaming precisa de internet. Se o navegador não abrir o app, tente abrir este link no Chrome.<p><a href="https://solasias.blogspot.com/p/app.html">Sobre o aplicativo SOLASIAS</a></p></footer></main><script>
+'use strict';
+const q=new URLSearchParams(location.search),code=q.get('c');
+const validCode=!!code&&/^[sf][at][A-Za-z0-9_-]{16}$/.test(code)&&[...q].length===1;
+let artist=validCode?(code[0]==='s'?'solasias':'thefrezza'):q.get('artist');
+let kind=validCode?(code[1]==='a'?'album':'track'):q.get('kind'),id=q.get('id');
+const bands={solasias:{name:'SOLASIAS',pkg:'com.frezzamusic.solasias',download:'https://drive.google.com/file/d/1Twe3W6NzPupDzILpC9a39x0gHn-uz8uH/view?usp=drivesdk'},thefrezza:{name:'theFrezza',pkg:'com.frezzamusic.thefrezza',download:'https://drive.google.com/file/d/1Xu0WLm_wW03LDzmRCzI47Miuvu8Er7HX/view?usp=drivesdk'}};
+const band=Object.hasOwn(bands,artist)?bands[artist]:null;
+const el=id=>document.getElementById(id);
+if(band){el('brand').textContent=band.name;el('bandDownload').hidden=false;el('bandDownload').href=band.download;el('bandDownload').textContent='Baixar '+band.name;}
+if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]{1,160}$/.test(id||'')))){
+ el('title').textContent=(q.get('title')|| (kind==='album'?'Álbum compartilhado':'Música compartilhada')).slice(0,240);
+ el('detail').textContent=band.name+(kind==='track'&&q.get('album')?' • '+q.get('album').slice(0,240):'');
+ document.title=el('title').textContent+' — '+band.name;
+ try{const cover=new URL(q.get('cover'));if(cover.protocol==='https:'&&cover.hostname==='drive.google.com'&&cover.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(cover.searchParams.get('id')||'')){el('cover').src=cover.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
+ const payload=new URLSearchParams(validCode?{c:code}:{artist,kind,id}).toString();
+ const stage=location.hash==='#fm-band'?'band':location.hash==='#fm-band-manual'?'band-manual':location.hash==='#fm-downloads'?'downloads':'main';
+ function fallback(hash){const url=new URL(location.href);url.hash=hash;return url.href;}
+ const mainIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package=com.frezzamusic.app;S.browser_fallback_url='+encodeURIComponent(fallback('fm-band'))+';end';
+ const bandIntent='intent://open?'+payload+'#Intent;scheme=frezzamusic;package='+band.pkg+';S.browser_fallback_url='+encodeURIComponent(fallback('fm-downloads'))+';end';
+ // Explicit packages avoid the chooser. Native band apps also prefer FREZZAMUSIC.
+ const manualMainIntent=mainIntent.replace(encodeURIComponent(fallback('fm-band')),encodeURIComponent(fallback('fm-band-manual')));
+ const automaticIntent=stage==='main'?mainIntent:bandIntent;
+ el('openContent').href=stage==='band'||stage==='band-manual'?bandIntent:manualMainIntent;
+ el('openContent').textContent=kind==='album'?'Abrir álbum':'Abrir música';
+ let appTimer;
+ function finishApp(){clearTimeout(appTimer);el('status').classList.remove('busy');el('status').textContent='Continue ouvindo nesta página ou abra o conteúdo no aplicativo.';}
+ function attempting(){clearTimeout(appTimer);el('status').classList.add('busy');el('status').textContent='Tentando abrir o aplicativo… Aguarde um instante.';appTimer=setTimeout(finishApp,2500);}
+ el('openContent').addEventListener('click',attempting);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')finishApp();else clearTimeout(appTimer);});
+ window.addEventListener('pageshow',finishApp);
+ finishApp();
+ if(stage==='downloads')el('status').textContent='Não foi possível abrir automaticamente. Toque em Abrir ou baixe um dos aplicativos abaixo.';
+ else if(stage==='band-manual')el('status').textContent='Toque em Abrir para tentar o aplicativo da banda ou use os downloads abaixo.';
+ else if(/Android/i.test(navigator.userAgent)){
+  attempting();
+  const guard='fm-open:'+payload+':'+stage;
+  let attempt=true;
+  try{const last=Number(sessionStorage.getItem(guard)||0);attempt=Date.now()-last>15000;if(attempt)sessionStorage.setItem(guard,String(Date.now()));}catch{}
+  if(attempt&&document.visibilityState!=='hidden'){
+   try{location.replace(automaticIntent);}catch{el('status').textContent='Toque em Abrir para continuar no aplicativo.';}
+  }
+ }
+ if(validCode)fetch('../catalog.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(catalog=>{
+  const entry=Object.hasOwn(catalog,code)?catalog[code]:null;
+  if(!entry||entry.artist!==artist||entry.kind!==kind)return;
+  el('title').textContent=String(entry.title).slice(0,240);
+  el('detail').textContent=band.name+(kind==='track'?' • '+String(entry.album).slice(0,240):'');
+  document.title=el('title').textContent+' — '+band.name;
+  try{const image=new URL(entry.cover);if(image.protocol==='https:'&&image.hostname==='drive.google.com'&&image.pathname==='/uc'&&/^[A-Za-z0-9_-]+$/.test(image.searchParams.get('id')||'')){el('cover').src=image.href;el('cover').hidden=false;el('cover').onerror=()=>el('cover').hidden=true;}}catch{}
+ }).catch(()=>{});
+ el('actions').hidden=false;
+ async function loadPreview(){
+  el('player').hidden=false;
+  const audio=el('audio'),ps=el('playerStatus'),retry=el('retryAudio'),startButton=el('startAudio');
+  let loadingTimer,completed=false,failed=false,src,storageKey,objectUrl,fetching=false;
+  audio.hidden=true;startButton.hidden=true;retry.hidden=true;
+  function message(text,busy=false){ps.textContent=text;ps.setAttribute('aria-busy',String(busy));}
+  function fail(){failed=true;clearTimeout(loadingTimer);message('Não foi possível carregar o áudio. Tente novamente ou ouça pelo aplicativo.');retry.hidden=false;startButton.disabled=false;}
+  function loading(){if(completed)return;clearTimeout(loadingTimer);message('Carregando o áudio… Aguarde.',true);loadingTimer=setTimeout(()=>{audio.pause();fail();},20000);}
+  try{
+   message('Preparando o reprodutor…',true);
+   let previewCode=code;
+   if(!validCode){const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(artist+'|'+kind+'|'+id)));previewCode=(artist==='solasias'?'s':'f')+(kind==='album'?'a':'t')+btoa(String.fromCharCode(...bytes.slice(0,12))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
+   storageKey='fm-preview-played:'+previewCode;
+   const response=await fetch('../listen/'+previewCode+'.json',{signal:AbortSignal.timeout(15000)});
+   if(!response.ok)throw Error('unavailable');
+   const entry=await response.json(),url=new URL(entry.src);
+   if(url.protocol!=='https:'||url.hostname!=='drive.usercontent.google.com'||url.pathname!=='/download'||!(/^[A-Za-z0-9_-]+$/).test(url.searchParams.get('id')||''))throw Error('invalid audio');
+   src=url.href;audio.crossOrigin='anonymous';el('previewTitle').textContent=(kind==='album'?'Faixa de apresentação do álbum: ':'')+String(entry.title).slice(0,240);
+   try{completed=localStorage.getItem(storageKey)==='1';}catch{}
+   if(completed){message('Você já ouviu esta apresentação. Continue gratuitamente em um dos aplicativos abaixo.');return;}
+   message('Toque em Ouvir música para carregar e reproduzir.');startButton.hidden=false;
+   audio.addEventListener('play',loading);
+   audio.addEventListener('waiting',loading);
+   audio.addEventListener('playing',()=>{failed=false;clearTimeout(loadingTimer);retry.hidden=true;startButton.hidden=true;message('Reproduzindo. Você pode pausar e continuar.');});
+   audio.addEventListener('canplay',()=>{failed=false;retry.hidden=true;clearTimeout(loadingTimer);message(audio.paused?'Pronto para ouvir. Toque em reproduzir.':'Reproduzindo.');});
+   audio.addEventListener('pause',()=>{clearTimeout(loadingTimer);if(!completed&&!failed&&!audio.error)message('Pausado. Toque em reproduzir para continuar.');});
+   audio.addEventListener('error',fail);
+   audio.addEventListener('ended',()=>{completed=true;clearTimeout(loadingTimer);try{localStorage.setItem(storageKey,'1');}catch{}audio.removeAttribute('src');audio.load();audio.hidden=true;retry.hidden=true;startButton.hidden=true;if(objectUrl)URL.revokeObjectURL(objectUrl);message('Gostou? Ouça todas as músicas gratuitamente no aplicativo.');});
+   async function startAudio(){
+    if(completed||fetching)return;
+    fetching=true;failed=false;retry.hidden=true;startButton.disabled=true;
+    message('Carregando a música… Isso pode levar alguns instantes.',true);
+    try{
+     // Fetch opts into CORS and omits Google cookies. A local blob avoids Drive's attachment/CORP restrictions on media elements.
+     const media=await fetch('https://frezzamusic-global-rankings.fondfield256.chatgpt.site/api/preview/'+previewCode,{mode:'cors',credentials:'omit',headers:{Range:'bytes=0-'},signal:AbortSignal.timeout(45000)});
+     if(!media.ok||!/^audio\//i.test(media.headers.get('content-type')||''))throw Error('invalid media');
+     const blob=await media.blob();if(!blob.size||blob.size>40*1024*1024)throw Error('invalid size');
+     if(objectUrl)URL.revokeObjectURL(objectUrl);
+     objectUrl=URL.createObjectURL(blob);audio.src=objectUrl;audio.hidden=false;startButton.hidden=true;audio.load();loading();
+     try{await audio.play();}catch(error){if(error.name==='NotAllowedError'){clearTimeout(loadingTimer);message('Música carregada. Toque em reproduzir no player.');}else throw error;}
+    }catch(error){console.warn('Audio preview failed',error.name,error.message);fail();}finally{fetching=false;startButton.disabled=false;}
+   }
+   startButton.onclick=startAudio;retry.onclick=startAudio;
+  }catch{fail();retry.onclick=()=>loadPreview();}
+ }
+ loadPreview();
+}else{el('status').textContent='Escolha um aplicativo abaixo. Para abrir uma música ou álbum específico, use o link compartilhado pelo app.';}
+</script></body></html>
