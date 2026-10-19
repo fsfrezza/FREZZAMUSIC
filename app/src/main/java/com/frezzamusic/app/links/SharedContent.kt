@@ -66,10 +66,12 @@ object SharedContent {
         return url(band, "album", folder)
     }
     fun share(context: Context, title: String, url: String) {
+        ShareShortener.share(context, title, url) { sharedUrl ->
         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, title)
-            putExtra(Intent.EXTRA_TEXT, "$title\n$url")
+            putExtra(Intent.EXTRA_TEXT, "$title\n$sharedUrl")
         }, "Compartilhar"))
+        }
     }
 }
