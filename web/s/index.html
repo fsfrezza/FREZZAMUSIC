@@ -87,13 +87,13 @@ if(band&&((validCode)||(!code&&['album','track'].includes(kind)&&/^[A-Za-z0-9_-]
     message('Carregando a música… Isso pode levar alguns instantes.',true);
     try{
      // Fetch opts into CORS and omits Google cookies. A local blob avoids Drive's attachment/CORP restrictions on media elements.
-     const media=await fetch(src,{mode:'cors',credentials:'omit',signal:AbortSignal.timeout(45000)});
+     const media=await fetch('https://frezzamusic-global-rankings.fondfield256.chatgpt.site/api/preview/'+previewCode,{mode:'cors',credentials:'omit',headers:{Range:'bytes=0-'},signal:AbortSignal.timeout(45000)});
      if(!media.ok||!/^audio\//i.test(media.headers.get('content-type')||''))throw Error('invalid media');
      const blob=await media.blob();if(!blob.size||blob.size>40*1024*1024)throw Error('invalid size');
      if(objectUrl)URL.revokeObjectURL(objectUrl);
      objectUrl=URL.createObjectURL(blob);audio.src=objectUrl;audio.hidden=false;startButton.hidden=true;audio.load();loading();
      try{await audio.play();}catch(error){if(error.name==='NotAllowedError'){clearTimeout(loadingTimer);message('Música carregada. Toque em reproduzir no player.');}else throw error;}
-    }catch{fail();}finally{fetching=false;startButton.disabled=false;}
+    }catch(error){console.warn('Audio preview failed',error.name,error.message);fail();}finally{fetching=false;startButton.disabled=false;}
    }
    startButton.onclick=startAudio;retry.onclick=startAudio;
   }catch{fail();retry.onclick=()=>loadPreview();}
