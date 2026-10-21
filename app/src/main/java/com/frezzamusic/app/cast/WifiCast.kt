@@ -1,6 +1,7 @@
 package com.frezzamusic.app.cast
 
 import android.content.Context
+import org.json.JSONObject
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.MediaLoadRequestData
@@ -14,7 +15,7 @@ object WifiCast {
 
     fun castTrack(
         context: Context, uri: String, title: String, artist: String, album: String,
-        positionMs: Long = 0
+        positionMs: Long = 0, lrc: String? = null
     ): String? {
         if (!uri.startsWith("https://", true) && !uri.startsWith("http://", true))
             return "Arquivos locais ainda exigem compartilhamento seguro na rede. Selecione uma música online."
@@ -35,6 +36,7 @@ object WifiCast {
                     .setMediaInfo(info)
                     .setCurrentTime(positionMs.coerceAtLeast(0))
                     .setAutoplay(true)
+                    .setCustomData(JSONObject().put("lrc", lrc?.take(60_000).orEmpty()))
                     .build()
             )
             null
