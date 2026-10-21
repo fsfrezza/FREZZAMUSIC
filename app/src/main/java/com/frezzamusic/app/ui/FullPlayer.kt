@@ -30,9 +30,11 @@ import com.frezzamusic.app.player.PlaybackController
 import com.frezzamusic.app.player.PlaybackService
 import com.frezzamusic.app.support.SupportPricing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,onClose:()->Unit){
  val context=LocalContext.current
+ val castScope=rememberCoroutineScope()
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
@@ -43,11 +45,15 @@ import kotlinx.coroutines.delay
     val connected = WifiCast.connected(context)
     if(connected) {
       OutlinedButton(onClick={
-        val error = WifiCast.castTrack(context,track.uri,track.title,track.artist,track.album,p?.currentPosition ?: 0L)
-        if(error==null) {
-          p?.pause()
-          Toast.makeText(context,"Música enviada à TV",Toast.LENGTH_SHORT).show()
-        } else Toast.makeText(context,error,Toast.LENGTH_LONG).show()
+        castScope.launch {
+          val error=runCatching {
+            WifiCast.castTrack(context,pc.castableUrl(track),track.title,track.artist,track.album,p?.currentPosition ?: 0L)
+          }.getOrElse { "Não foi possível acessar a música: ${it.message ?: "erro"}" }
+          if(error==null) {
+            p?.pause()
+            Toast.makeText(context,"Enviando música à TV",Toast.LENGTH_SHORT).show()
+          } else Toast.makeText(context,error,Toast.LENGTH_LONG).show()
+        }
       },modifier=Modifier.fillMaxWidth()) {
         Icon(Icons.Default.CastConnected,null);Spacer(Modifier.width(8.dp));Text("Tocar esta música na TV")
       }
