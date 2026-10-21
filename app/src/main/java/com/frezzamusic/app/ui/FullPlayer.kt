@@ -40,8 +40,8 @@ import kotlinx.coroutines.delay
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
  LaunchedEffect(page,followTv,track?.id) {
-   if(track!=null && (followTv || page==0 || page==1)) {
-     WifiCast.syncScreen(shareContext,page,followTv,track.lrc,track.title,track.artist)
+   if(track!=null && followTv && page in 0..1) {
+     WifiCast.syncScreen(shareContext,page,true,track.lrc,track.title,track.artist)
    }
  }
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
