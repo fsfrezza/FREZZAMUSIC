@@ -63,6 +63,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("com.google.android.gms:play-services-cast-framework:22.1.0")
+    implementation("androidx.mediarouter:mediarouter:1.8.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
