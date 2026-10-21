@@ -1,6 +1,11 @@
 package com.frezzamusic.app.ui
 
 import com.frezzamusic.app.links.SharedContent
+import com.frezzamusic.app.cast.WifiCast
+import android.widget.Toast
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.framework.CastButtonFactory
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,7 +40,22 @@ import kotlinx.coroutines.delay
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
-  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };AndroidView(factory={ctx->MediaRouteButton(ctx).also{CastButtonFactory.setUpMediaRouteButton(ctx,it)}},modifier=Modifier.size(44.dp));Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  if(track!=null && WifiCast.connected(shareContext)) {
+    OutlinedButton(onClick={
+      val url = p?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+      WifiCast.send(shareContext,url,track.title,track.artist,track.album,p?.currentPosition?:0L) { ok,message ->
+        if(ok) p?.pause()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+          Toast.makeText(shareContext,message,Toast.LENGTH_LONG).show()
+        }
+      }
+    },modifier=Modifier.fillMaxWidth()) {
+      Icon(Icons.Default.CastConnected,null)
+      Spacer(Modifier.width(8.dp))
+      Text("Tocar na TV via Wi-Fi")
+    }
+  }
   TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
   when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
  }
