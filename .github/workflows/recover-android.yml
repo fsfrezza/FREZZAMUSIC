@@ -1,0 +1,24 @@
+name: Recovery Android APKs
+on:
+  push:
+    branches: [hotfix/restore-v023-base]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build three restored variants
+        run: gradle :app:assembleFrezzamusicDebug :app:assembleSolasiasDebug :app:assembleThefrezzaDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: restored-v023-apks
+          path: app/build/outputs/apk/**/debug/*.apk
