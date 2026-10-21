@@ -18,5 +18,6 @@ class PlaybackController(private val context:Context,private val resolver:Stream
  fun shuffle(){controller?.let{it.shuffleModeEnabled=!it.shuffleModeEnabled};onChanged?.invoke()};fun repeat(){controller?.let{it.repeatMode=when(it.repeatMode){Player.REPEAT_MODE_OFF->Player.REPEAT_MODE_ALL;Player.REPEAT_MODE_ALL->Player.REPEAT_MODE_ONE;else->Player.REPEAT_MODE_OFF}};onChanged?.invoke()}
  fun setSpeed(speed:Float){controller?.setPlaybackSpeed(speed.coerceIn(.5f,2f));onChanged?.invoke()}
  fun sleepTimer(minutes:Int){scope.launch{delay(minutes.coerceAtLeast(1)*60_000L);controller?.pause();onChanged?.invoke()}}
+ suspend fun castableUrl(t:Track):String = if(t.remote)resolver.resolve(t).url else t.uri
  private suspend fun toItem(t:Track):MediaItem{val u=if(t.remote)resolver.resolve(t).url else t.uri;return MediaItem.Builder().setMediaId(t.id).setUri(u).setMediaMetadata(MediaMetadata.Builder().setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album).setArtworkUri(t.artwork?.let(android.net.Uri::parse)).build()).build()}
 }
