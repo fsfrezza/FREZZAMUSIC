@@ -36,6 +36,9 @@ import com.frezzamusic.app.ui.FullPlayer
 import com.frezzamusic.app.ui.theme.FrezzaTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import com.frezzamusic.app.update.AppUpdates
+import com.frezzamusic.app.update.AvailableUpdate
 
 class MainActivity : ComponentActivity() {
     private lateinit var folders: FolderMusicRepository
@@ -81,6 +84,12 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     val user = remember { UserLibraryRepository(context) }
     val playback = remember { PlaybackController(context, DevelopmentDriveStreamResolver(), user) }
 
+    val updatePreferences = remember { context.getSharedPreferences("app_updates", android.content.Context.MODE_PRIVATE) }
+    var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
+    LaunchedEffect(Unit) {
+        delay(30_000)
+        availableUpdate = AppUpdates.check(context)
+    }
     var changeCounter by remember { mutableIntStateOf(0) }
     var tab by remember { mutableStateOf(AppTab.HOME) }
     var localTracks by remember { mutableStateOf(emptyList<Track>()) }
@@ -123,6 +132,24 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, pickFolder: ((() -> Unit)) -> Un
     val controller = playback.controller
     val currentTrack = allTracks.find { it.id == controller?.currentMediaItem?.mediaId }
 
+    if (availableUpdate != null) {
+        val update = availableUpdate!!
+        AlertDialog(
+            onDismissRequest = { availableUpdate = null },
+            title = { Text("Atualização disponível") },
+            text = { Text("Versão ${update.versionName} disponível para ${BuildConfig.PROJECT_MODE}. Deseja abrir o download? O Android solicitará confirmação para instalar.") },
+            confirmButton = { TextButton(onClick = { AppUpdates.openDownload(context, update); availableUpdate = null }) { Text("Atualizar agora") } },
+            dismissButton = {
+                Column {
+                    TextButton(onClick = { availableUpdate = null }) { Text("Depois") }
+                    TextButton(onClick = {
+                        updatePreferences.edit().putBoolean("automatic_check", false).apply()
+                        availableUpdate = null
+                    }) { Text("Não verificar automaticamente") }
+                }
+            }
+        )
+    }
     Scaffold(
         bottomBar = {
             Column {
