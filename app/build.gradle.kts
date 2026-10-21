@@ -15,6 +15,7 @@ android {
         versionName = "0.20.0"
     }
     flavorDimensions += "project"
+    defaultConfig { resValue("string", "cast_receiver_app_id", "CC1AD845") }
     productFlavors {
         create("frezzamusic") {
             dimension = "project"
