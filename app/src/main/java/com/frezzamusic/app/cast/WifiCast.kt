@@ -6,8 +6,22 @@ import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
 import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.framework.CastContext
+import org.json.JSONObject
 
 object WifiCast {
+    private const val NAMESPACE = "urn:x-cast:com.frezzamusic.lyrics"
+
+    fun syncScreen(context: Context, page: Int, follow: Boolean, lrc: String?, title: String, artist: String) {
+        val session = runCatching { CastContext.getSharedInstance(context).sessionManager.currentCastSession }.getOrNull() ?: return
+        if (!session.isConnected) return
+        val payload = JSONObject().put("type", "display")
+            .put("page", if (page == 1) "lyrics" else "now-playing")
+            .put("follow", follow)
+            .put("title", title).put("artist", artist)
+            .put("lrc", lrc?.take(60000).orEmpty()).toString()
+        runCatching { session.sendMessage(NAMESPACE, payload) }
+    }
+
     fun connected(context: Context): Boolean = runCatching {
         CastContext.getSharedInstance(context).sessionManager.currentCastSession?.isConnected == true
     }.getOrDefault(false)
