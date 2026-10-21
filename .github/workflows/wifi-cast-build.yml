@@ -1,0 +1,33 @@
+name: Wi-Fi Cast Android build
+
+on:
+  push:
+    branches: [feature/wifi-google-cast]
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/wifi-cast-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile three Android variants
+        run: gradle :app:assembleFrezzamusicDebug :app:assembleSolasiasDebug :app:assembleThefrezzaDebug --stacktrace --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: wifi-cast-debug-apks
+          path: app/build/outputs/apk/**/debug/*.apk
