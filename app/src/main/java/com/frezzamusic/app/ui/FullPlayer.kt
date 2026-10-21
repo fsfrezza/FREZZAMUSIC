@@ -1,4 +1,10 @@
 package com.frezzamusic.app.ui
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.frezzamusic.app.cast.WifiCast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,12 +32,27 @@ import com.frezzamusic.app.support.SupportPricing
 import kotlinx.coroutines.delay
 
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,onClose:()->Unit){
+ val context=LocalContext.current
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
-  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);AndroidView(factory={ctx->MediaRouteButton(ctx).also{CastButtonFactory.setUpMediaRouteButton(ctx,it)}},modifier=Modifier.size(48.dp));IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  if(track!=null) {
+    val connected = WifiCast.connected(context)
+    if(connected) {
+      OutlinedButton(onClick={
+        val error = WifiCast.castTrack(context,track.uri,track.title,track.artist,track.album,p?.currentPosition ?: 0L)
+        if(error==null) {
+          p?.pause()
+          Toast.makeText(context,"Música enviada à TV",Toast.LENGTH_SHORT).show()
+        } else Toast.makeText(context,error,Toast.LENGTH_LONG).show()
+      },modifier=Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.CastConnected,null);Spacer(Modifier.width(8.dp));Text("Tocar esta música na TV")
+      }
+    }
+  }
   TabRow(page){Tab(page==0,{page=0},text={Text("Reprodutor",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
   when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc)}
  }
