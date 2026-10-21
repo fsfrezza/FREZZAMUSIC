@@ -1,0 +1,53 @@
+package com.frezzamusic.app.cast
+
+import android.content.Context
+import android.net.Uri
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.framework.CastContext
+
+object WifiCast {
+    fun connected(context: Context): Boolean = runCatching {
+        CastContext.getSharedInstance(context).sessionManager.currentCastSession?.isConnected == true
+    }.getOrDefault(false)
+
+    fun send(context: Context, uri: String, title: String, artist: String, album: String, positionMs: Long, callback: (Boolean, String) -> Unit) {
+        val scheme = Uri.parse(uri).scheme?.lowercase()
+        if (scheme !in listOf("http", "https")) {
+            callback(false, "Áudio local ainda não pode ser enviado à TV; tente uma música online.")
+            return
+        }
+        val session = runCatching { CastContext.getSharedInstance(context).sessionManager.currentCastSession }.getOrNull()
+        val client = session?.remoteMediaClient
+        if (client == null) {
+            callback(false, "Selecione primeiro uma TV compatível com Google Cast.")
+            return
+        }
+        val path = Uri.parse(uri).path.orEmpty().lowercase()
+        val mime = when {
+            path.endsWith(".m4a") -> "audio/mp4"
+            path.endsWith(".aac") -> "audio/aac"
+            path.endsWith(".ogg") || path.endsWith(".opus") -> "audio/ogg"
+            path.endsWith(".flac") -> "audio/flac"
+            path.endsWith(".wav") -> "audio/wav"
+            else -> "audio/mpeg"
+        }
+        val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK).apply {
+            putString(MediaMetadata.KEY_TITLE, title)
+            putString(MediaMetadata.KEY_ARTIST, artist)
+            putString(MediaMetadata.KEY_ALBUM_TITLE, album)
+        }
+        val media = MediaInfo.Builder(uri).setContentType(mime)
+            .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED).setMetadata(metadata).build()
+        try {
+            val request = MediaLoadRequestData.Builder().setMediaInfo(media)
+                .setAutoplay(true).setCurrentTime(positionMs.coerceAtLeast(0L)).build()
+            client.load(request).setResultCallback { result ->
+                callback(result.status.isSuccess, if (result.status.isSuccess) "Enviado à TV." else "A TV não aceitou a faixa.")
+            }
+        } catch (error: Exception) {
+            callback(false, "Falha na transmissão: ${error.message ?: "erro desconhecido"}")
+        }
+    }
+}
