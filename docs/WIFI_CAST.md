@@ -29,3 +29,17 @@ Casos de teste:
 - Verificações de ciclo de vida e testes instrumentados na TV.
 
 O aplicativo Android usa Media3; o receptor Google Cast mantém uma sessão remota distinta. É necessário coordenar estados, fila e volume para que a experiência funcione como um único player.
+
+
+## Protótipo de letras na TV (Custom Receiver)
+
+O arquivo `cast-receiver/index.html` implementa uma interface Cast Web Receiver com reprodução por Cast Application Framework e sobreposição da linha atual e seguinte da letra `.lrc` com relógio do player. O remetente Android envia texto LRC pelo `MediaLoadRequestData.customData`.
+
+**ATENÇÃO: ainda não funciona com o Default Media Receiver.** Para ativar a exibição visual:
+1. Hospedar `cast-receiver/index.html` em HTTPS público acessível à TV;
+2. Registrar a URL como **Custom Web Receiver** no [Google Cast SDK Developer Console](https://cast.google.com/publish/);
+3. Substituir `cast_receiver_app_id` em `app/build.gradle.kts` (valor inicial `CC1AD845`) pelo App ID gerado e recompilar;
+4. Adicionar a TV ao cadastro de teste do receptor quando necessário;
+5. Testar relógio de playback, LRC e sincronização nas TVs reais.
+
+Isso não representa DLNA, nem garante compatibilidade com uma TV que não implemente Cast. O receptor é um protótipo, não foi testado em dispositivo físico.
