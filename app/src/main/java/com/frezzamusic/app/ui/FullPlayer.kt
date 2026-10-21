@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
       OutlinedButton(onClick={
         castScope.launch {
           val error=runCatching {
-            WifiCast.castTrack(context,pc.castableUrl(track),track.title,track.artist,track.album,p?.currentPosition ?: 0L)
+            WifiCast.castTrack(context,pc.castableUrl(track),track.title,track.artist,track.album,p?.currentPosition ?: 0L,track.lrc)
           }.getOrElse { "Não foi possível acessar a música: ${it.message ?: "erro"}" }
           if(error==null) {
             p?.pause()
