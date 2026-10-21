@@ -46,13 +46,16 @@ import kotlinx.coroutines.launch
     if(connected) {
       OutlinedButton(onClick={
         castScope.launch {
-          val error=runCatching {
-            WifiCast.castTrack(context,pc.castableUrl(track),track.title,track.artist,track.album,p?.currentPosition ?: 0L,track.lrc)
-          }.getOrElse { "Não foi possível acessar a música: ${it.message ?: "erro"}" }
-          if(error==null) {
-            p?.pause()
-            Toast.makeText(context,"Enviando música à TV",Toast.LENGTH_SHORT).show()
-          } else Toast.makeText(context,error,Toast.LENGTH_LONG).show()
+          runCatching { pc.castableUrl(track) }.onSuccess { url ->
+            WifiCast.castTrack(
+              context,url,track.title,track.artist,track.album,p?.currentPosition ?: 0L,track.lrc
+            ) { accepted, message ->
+              if(accepted) p?.pause()
+              Toast.makeText(context,message,Toast.LENGTH_LONG).show()
+            }
+          }.onFailure { error ->
+            Toast.makeText(context,"Não foi possível acessar a música: ${error.message ?: "erro"}",Toast.LENGTH_LONG).show()
+          }
         }
       },modifier=Modifier.fillMaxWidth()) {
         Icon(Icons.Default.CastConnected,null);Spacer(Modifier.width(8.dp));Text("Tocar esta música na TV")
