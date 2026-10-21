@@ -22,3 +22,5 @@ jobs:
         with:
           name: restored-v023-apks
           path: app/build/outputs/apk/**/debug/*.apk
+
+# Recovery build trigger: restore APKs from v0.23.5 base
