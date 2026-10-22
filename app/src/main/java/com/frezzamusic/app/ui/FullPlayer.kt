@@ -41,7 +41,8 @@ import kotlinx.coroutines.delay
  var lastLanPage by remember { mutableIntStateOf(0) }
  var showLanTv by remember { mutableStateOf(false) }
  var sendAudioToTv by remember { mutableStateOf(false) }
- DisposableEffect(lanTv) { onDispose { lanTv?.stop() } }
+ val serverForLifecycle = lanTv
+ DisposableEffect(serverForLifecycle) { onDispose { serverForLifecycle?.stop() } }
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
