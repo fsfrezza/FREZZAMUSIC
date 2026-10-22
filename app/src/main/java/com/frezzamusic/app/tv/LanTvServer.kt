@@ -22,9 +22,10 @@ class LanTvServer(private val context: Context) {
     private val token = (100000 + SecureRandom().nextInt(900000)).toString()
     private var server: ServerSocket? = null
     private val audioUri = AtomicReference<String?>(null)
+    private val audioId = AtomicReference("")
     private val paired = java.util.concurrent.atomic.AtomicBoolean(false)
     fun hasPairedReceiver(): Boolean = paired.get()
-    fun setAudioSource(uri: String?) { audioUri.set(uri) }
+    fun setAudioSource(uri: String?) { if (audioUri.getAndSet(uri) != uri) audioId.set(java.util.UUID.randomUUID().toString()) }
     val address: String? get() {
         val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return null
         @Suppress("DEPRECATION") val ip = Formatter.formatIpAddress(wm.connectionInfo.ipAddress)
@@ -46,7 +47,7 @@ class LanTvServer(private val context: Context) {
         current.set(JSONObject().put("page", when(page){1->"lyrics";2->"queue";3->"audio";else->"playing"})
             .put("title",title).put("artist",artist).put("album",album)
             .put("lrc",lrc?.take(60000).orEmpty()).put("positionMs",positionMs)
-            .put("playing",playing))
+            .put("playing",playing).put("audioId",audioId.get()))
     }
 
     fun stop() { runCatching { server?.close() }; executor.shutdownNow() }
@@ -77,7 +78,7 @@ class LanTvServer(private val context: Context) {
             }
             if (path == "/") {
                 mime="text/html; charset=utf-8";status="200 OK"
-                body = """<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#101724;color:white;font:24px sans-serif;text-align:center;padding:5vw}input,button{font:28px sans-serif;padding:12px;margin:8px}#line{font-size:4vw;margin:5vh}small{color:#bbb}</style><h1>FREZZAMUSIC TV</h1><p>Digite o código mostrado no celular</p><input id="code" maxlength="6" inputmode="numeric" placeholder="Código"><button onclick="go()">Conectar</button><div id="view" hidden><h2 id="title"></h2><p id="artist"></p><div id="line"></div><small id="status"></small></div><script>let c='';function go(){c=document.getElementById('code').value;if(!/^\\d{6}$/.test(c))return;document.getElementById('view').hidden=false;refresh();setInterval(refresh,1000)}async function refresh(){if(!c)return;try{const r=await fetch('/state?code='+encodeURIComponent(c),{cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();document.getElementById('title').textContent=d.title||'';document.getElementById('artist').textContent=d.artist||'';document.getElementById('status').textContent=(d.page||'')+' • '+(d.playing?'Reproduzindo':'Pausado');if(d.page==='lyrics'){const rows=(d.lrc||'').split(/\\r?\\n/).map(x=>{let m=x.match(/\\[(\\d+):(\\d+(?:\\.\\d+)?)\\]/);return m?{t:(Number(m[1])*60+Number(m[2]))*1000,text:x.replace(/\\[[^\\]]*\\]/g,'')}:null}).filter(Boolean).sort((a,b)=>a.t-b.t);document.getElementById('line').textContent=rows.filter(x=>x.t<=d.positionMs).at(-1)?.text||'';}else document.getElementById('line').textContent=d.album||'';}catch(e){document.getElementById('status').textContent='Não conectado / código inválido';}}</script></html>"""
+                body = """<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#101724;color:white;font:24px sans-serif;text-align:center;padding:5vw}input,button{font:28px sans-serif;padding:12px;margin:8px}#line{font-size:4vw;margin:5vh}small{color:#bbb}</style><h1>FREZZAMUSIC TV</h1><p>Digite o código mostrado no celular</p><input id="code" maxlength="6" inputmode="numeric" placeholder="Código"><button onclick="go()">Conectar</button><div id="view" hidden><h2 id="title"></h2><p id="artist"></p><div id="line"></div><audio id="audio" controls autoplay></audio><small id="status"></small></div><script>let c='';function go(){c=document.getElementById('code').value;if(!/^\\d{6}$/.test(c))return;document.getElementById('view').hidden=false;document.getElementById('audio').src='/audio?code='+encodeURIComponent(c);document.getElementById('audio').play().catch(()=>{});refresh();setInterval(refresh,1000)}async function refresh(){if(!c)return;try{const r=await fetch('/state?code='+encodeURIComponent(c),{cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();document.getElementById('title').textContent=d.title||'';document.getElementById('artist').textContent=d.artist||'';document.getElementById('status').textContent=(d.page||'')+' • '+(d.playing?'Reproduzindo':'Pausado');const a=document.getElementById('audio');if(d.audioId!==window.audioId){window.audioId=d.audioId;a.src='/audio?code='+encodeURIComponent(c)+'&v='+encodeURIComponent(d.audioId||'');a.play().catch(()=>{});}if(!d.playing && !a.paused)a.pause();if(d.playing&&a.paused)a.play().catch(()=>{});if(Number.isFinite(d.positionMs)&&Math.abs(a.currentTime-d.positionMs/1000)>2.5&&a.seekable.length){try{a.currentTime=d.positionMs/1000}catch(_){}}if(d.page==='lyrics'){const rows=(d.lrc||'').split(/\\r?\\n/).map(x=>{let m=x.match(/\\[(\\d+):(\\d+(?:\\.\\d+)?)\\]/);return m?{t:(Number(m[1])*60+Number(m[2]))*1000,text:x.replace(/\\[[^\\]]*\\]/g,'')}:null}).filter(Boolean).sort((a,b)=>a.t-b.t);document.getElementById('line').textContent=rows.filter(x=>x.t<=d.positionMs).at(-1)?.text||'';}else document.getElementById('line').textContent=d.album||'';}catch(e){document.getElementById('status').textContent='Não conectado / código inválido';}}</script></html>"""
             } else if(path=="/state" && ok) {
                 mime="application/json; charset=utf-8";status="200 OK";paired.set(true);body=current.get().toString()
             } else {
@@ -127,7 +128,7 @@ class LanTvServer(private val context: Context) {
             val remaining=if(remote==null && total>=0) (total-start).coerceAtLeast(0) else length
             val partial=(remote?.responseCode==206)||(remote==null&&offset>0&&total>=0)
             val headers=buildString {
-                append("HTTP/1.1 ${if(partial) "206 Partial Content" else "200 OK"}\\r\\n")
+                append("HTTP/1.1 ${if(partial) "206 Partial Content" else "200 OK"}\r\n")
                 append("Content-Type: $mime\\r\\n")
                 append("Accept-Ranges: bytes\\r\\n")
                 if(remaining>=0)append("Content-Length: $remaining\\r\\n")
