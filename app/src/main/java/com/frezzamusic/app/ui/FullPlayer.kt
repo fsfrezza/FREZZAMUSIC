@@ -40,6 +40,7 @@ import kotlinx.coroutines.delay
  var lanTv by remember { mutableStateOf<LanTvServer?>(null) }
  var lastLanPage by remember { mutableIntStateOf(0) }
  var showLanTv by remember { mutableStateOf(false) }
+ var sendAudioToTv by remember { mutableStateOf(false) }
  DisposableEffect(lanTv) { onDispose { lanTv?.stop() } }
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
@@ -66,6 +67,21 @@ import kotlinx.coroutines.delay
     } else showLanTv=true
   },modifier=Modifier.fillMaxWidth()) {
     Icon(Icons.Default.Wifi,null);Spacer(Modifier.width(8.dp));Text("Conectar TV pelo Wi-Fi (sem Cast)")
+  }
+  LaunchedEffect(lanTv,track?.id,p?.currentMediaItem?.localConfiguration?.uri) {
+    lanTv?.setAudioSource(p?.currentMediaItem?.localConfiguration?.uri?.toString())
+  }
+  if(lanTv!=null) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+      Text("Reproduzir áudio na TV",Modifier.weight(1f))
+      Switch(checked=sendAudioToTv,onCheckedChange={ enabled ->
+        sendAudioToTv=enabled
+        if(enabled && lanTv?.hasPairedReceiver()==true) {
+          p?.pause()
+          Toast.makeText(shareContext,"Controle de áudio enviado à TV",Toast.LENGTH_SHORT).show()
+        }
+      })
+    }
   }
   if(lanTv!=null) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
