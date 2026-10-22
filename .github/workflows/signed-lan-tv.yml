@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  signed-debug-apks:
+  signed-release-apks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,13 +21,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build installable signed debug variants
-        run: gradle :app:assembleFrezzamusicDebug :app:assembleSolasiasDebug :app:assembleThefrezzaDebug --no-daemon --stacktrace
+      - name: Build signed optimized release variants
+        run: gradle :app:assembleFrezzamusicRelease :app:assembleSolasiasRelease :app:assembleThefrezzaRelease --no-daemon --stacktrace
+      - name: Validate manifests and R8 output
+        run: python3 scripts/verify-release-build.py
       - name: Check signing with Android apksigner
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t apks < <(find app/build/outputs/apk -name '*.apk' -path '*/debug/*' | sort)
+          mapfile -t apks < <(find app/build/outputs/apk -name '*.apk' -path '*/release/*' | sort)
           test "${#apks[@]}" -eq 3
           for apk in "${apks[@]}"; do
             python3 scripts/check_apk_signature.py "$apk"
@@ -37,9 +39,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p distribution
-          cp app/build/outputs/apk/frezzamusic/debug/app-frezzamusic-debug.apk distribution/FREZZAMUSIC.apk
-          cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk distribution/SOLASIAS.apk
-          cp app/build/outputs/apk/thefrezza/debug/app-thefrezza-debug.apk distribution/theFrezza.apk
+          cp app/build/outputs/apk/frezzamusic/release/app-frezzamusic-release.apk distribution/FREZZAMUSIC.apk
+          cp app/build/outputs/apk/solasias/release/app-solasias-release.apk distribution/SOLASIAS.apk
+          cp app/build/outputs/apk/thefrezza/release/app-thefrezza-release.apk distribution/theFrezza.apk
       - uses: actions/upload-artifact@v4
         with:
           name: signed-lan-tv-v0238
