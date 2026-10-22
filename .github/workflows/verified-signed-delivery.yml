@@ -1,0 +1,40 @@
+name: Verified Signed APK Delivery
+on:
+  push:
+    branches: [feature/lan-tv-receiver]
+    paths:
+      - '.github/workflows/verified-signed-delivery.yml'
+      - 'app/**'
+      - 'scripts/verify-release-build.py'
+  workflow_dispatch:
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build signed release variants
+        run: gradle :app:assembleFrezzamusicRelease :app:assembleSolasiasRelease :app:assembleThefrezzaRelease --no-daemon
+      - name: Verify release integrity and signatures
+        run: python3 scripts/verify-release-build.py
+      - name: Copy verified APKs with final names
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/frezzamusic/release/app-frezzamusic-release.apk dist/FREZZAMUSIC.apk
+          cp app/build/outputs/apk/solasias/release/app-solasias-release.apk dist/SOLASIAS.apk
+          cp app/build/outputs/apk/thefrezza/release/app-thefrezza-release.apk dist/theFrezza.apk
+          test "$(find dist -name '*.apk' | wc -l)" -eq 3
+          sha256sum dist/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-apks-v0238
+          path: dist/*.apk
+          if-no-files-found: error
