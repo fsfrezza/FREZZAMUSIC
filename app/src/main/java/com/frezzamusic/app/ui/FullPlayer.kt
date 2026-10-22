@@ -67,6 +67,12 @@ import kotlinx.coroutines.delay
       Text("TV acompanha as abas",Modifier.weight(1f),style=MaterialTheme.typography.labelMedium)
       Switch(checked=followTv,onCheckedChange={ followTv=it })
     }
+    if(!followTv) {
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Center) {
+        TextButton(onClick={ WifiCast.syncScreen(shareContext,0,false,track.lrc,track.title,track.artist) }) { Text("TV: Tocar") }
+        TextButton(onClick={ WifiCast.syncScreen(shareContext,1,false,track.lrc,track.title,track.artist) }) { Text("TV: Letras") }
+      }
+    }
     Text("Na TV: Tocar e Letras. Fila e Áudio mantêm a última tela compatível.",style=MaterialTheme.typography.labelSmall)
   }
   TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
