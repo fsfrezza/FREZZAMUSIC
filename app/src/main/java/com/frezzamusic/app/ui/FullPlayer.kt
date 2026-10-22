@@ -38,14 +38,16 @@ import kotlinx.coroutines.delay
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
  var lanTv by remember { mutableStateOf<LanTvServer?>(null) }
+ var lastLanPage by remember { mutableIntStateOf(0) }
  var showLanTv by remember { mutableStateOf(false) }
  DisposableEffect(lanTv) { onDispose { lanTv?.stop() } }
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
- LaunchedEffect(lanTv, track?.id, page, pos, p?.isPlaying, followTv) {
-   if (track != null && (followTv || page in 0..1)) {
-     lanTv?.publish(if(followTv) page else 1, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true)
+ LaunchedEffect(page, followTv) { if (followTv) lastLanPage = page }
+ LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying) {
+   if (track != null) {
+     lanTv?.publish(lastLanPage, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true)
    }
  }
  LaunchedEffect(page,followTv,track?.id) {
