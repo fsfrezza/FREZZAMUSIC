@@ -63,7 +63,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (releaseStore != null) signingConfig = signingConfigs.getByName("production")
+            signingConfig = if (releaseStore != null) signingConfigs.getByName("production") else signingConfigs.getByName("debug")
         }
     }
     buildFeatures { compose = true; buildConfig = true }
