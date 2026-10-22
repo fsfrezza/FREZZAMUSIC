@@ -26,7 +26,7 @@ object WifiCast {
         CastContext.getSharedInstance(context).sessionManager.currentCastSession?.isConnected == true
     }.getOrDefault(false)
 
-    fun send(context: Context, uri: String, title: String, artist: String, album: String, positionMs: Long, callback: (Boolean, String) -> Unit) {
+    fun send(context: Context, uri: String, title: String, artist: String, album: String, positionMs: Long, lrc: String?, callback: (Boolean, String) -> Unit) {
         val scheme = Uri.parse(uri).scheme?.lowercase()
         if (scheme !in listOf("http", "https")) {
             callback(false, "Áudio local ainda não pode ser enviado à TV; tente uma música online.")
@@ -56,7 +56,9 @@ object WifiCast {
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED).setMetadata(metadata).build()
         try {
             val request = MediaLoadRequestData.Builder().setMediaInfo(media)
-                .setAutoplay(true).setCurrentTime(positionMs.coerceAtLeast(0L)).build()
+                .setAutoplay(true).setCurrentTime(positionMs.coerceAtLeast(0L))
+                .setCustomData(JSONObject().put("lrc", lrc?.take(60000).orEmpty()))
+                .build()
             client.load(request).setResultCallback { result ->
                 callback(result.status.isSuccess, if (result.status.isSuccess) "Enviado à TV." else "A TV não aceitou a faixa.")
             }
