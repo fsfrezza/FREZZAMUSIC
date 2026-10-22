@@ -3,6 +3,9 @@ package com.frezzamusic.app.ui
 import com.frezzamusic.app.links.SharedContent
 import com.frezzamusic.app.cast.WifiCast
 import com.frezzamusic.app.tv.LanTvServer
+import com.frezzamusic.app.tv.DlnaDevice
+import com.frezzamusic.app.tv.DlnaDiscovery
+import com.frezzamusic.app.tv.DlnaTransport
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -34,6 +37,10 @@ import kotlinx.coroutines.delay
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,requestVisualizerAccess:((Boolean)->Unit)->Unit,onPageChanged:(Int)->Unit,onClose:()->Unit){
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
+ var dlnaDevices by remember { mutableStateOf<List<DlnaDevice>>(emptyList()) }
+ var dlnaScanning by remember { mutableStateOf(false) }
+ var showDlnaPicker by remember { mutableStateOf(false) }
+ var activeDlna by remember { mutableStateOf<DlnaDevice?>(null) }
  var lanTv by remember { mutableStateOf<LanTvServer?>(null) }
  var lastLanPage by remember { mutableIntStateOf(0) }
  var showLanTv by remember { mutableStateOf(false) }
@@ -58,6 +65,33 @@ import kotlinx.coroutines.delay
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  OutlinedButton(onClick={
+    dlnaScanning=true
+    showDlnaPicker=true
+    DlnaDiscovery.scan(shareContext) { devices, error ->
+      dlnaDevices=devices
+      dlnaScanning=false
+      if(error!=null) Toast.makeText(shareContext,error,Toast.LENGTH_LONG).show()
+    }
+  },modifier=Modifier.fillMaxWidth()) {
+    Icon(Icons.Default.Tv,null)
+    Spacer(Modifier.width(8.dp))
+    Text(if(dlnaScanning) "Procurando TVs..." else "Procurar TVs na rede Wi-Fi")
+  }
+  if(activeDlna!=null) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+      Text("TV: ${activeDlna?.name}",Modifier.weight(1f),maxLines=1)
+      TextButton(onClick={
+        activeDlna?.let { device -> DlnaTransport.pause(device) { } }
+        activeDlna=null
+        p?.play()
+      }) { Text("Desconectar") }
+    }
+    Row {
+      TextButton(onClick={activeDlna?.let{device->DlnaTransport.pause(device){}}}){Text("Pausar TV")}
+      TextButton(onClick={activeDlna?.let{device->DlnaTransport.resume(device){}}}){Text("Retomar TV")}
+    }
+  }
   OutlinedButton(onClick={
     if(lanTv==null) {
       val server=LanTvServer(shareContext.applicationContext)
@@ -134,6 +168,29 @@ import kotlinx.coroutines.delay
   TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
   when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
  }
+ if(showDlnaPicker) AlertDialog(
+   onDismissRequest={showDlnaPicker=false},
+   title={Text("TVs disponíveis no Wi-Fi")},
+   text={Column {
+     if(dlnaScanning) CircularProgressIndicator()
+     else if(dlnaDevices.isEmpty()) Text("Nenhuma TV DLNA encontrada. Verifique se TV e celular estão no mesmo Wi-Fi e se a TV oferece reprodução por rede (DLNA/UPnP).")
+     else dlnaDevices.forEach { device ->
+       TextButton(onClick={
+         showDlnaPicker=false
+         val server = lanTv ?: LanTvServer(shareContext.applicationContext).also { if(it.start())lanTv=it }
+         val uri = p?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+         server.setAudioSource(uri)
+         val url = server.address
+         if(url==null || uri.isBlank()) Toast.makeText(shareContext,"Não foi possível preparar o áudio para a TV",Toast.LENGTH_LONG).show()
+         else DlnaTransport.play(device,"${url}/audio?code=${server.pairingCode}",track?.title.orEmpty()) { ok,message ->
+           Toast.makeText(shareContext,message,Toast.LENGTH_LONG).show()
+           if(ok){activeDlna=device;p?.pause()}
+         }
+       }) { Text(device.name) }
+     }
+   }},
+   confirmButton={TextButton(onClick={showDlnaPicker=false}){Text("Fechar")}}
+ )
  if(showLanTv && lanTv!=null) AlertDialog(onDismissRequest={showLanTv=false},
    title={Text("Conectar TV pelo Wi-Fi")},
    text={Column {
