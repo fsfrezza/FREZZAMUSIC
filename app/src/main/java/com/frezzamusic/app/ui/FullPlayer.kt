@@ -46,9 +46,9 @@ import kotlinx.coroutines.delay
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
  LaunchedEffect(page, followTv) { if (followTv) lastLanPage = page }
- LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying) {
+ LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying, sendAudioToTv) {
    if (track != null) {
-     lanTv?.publish(lastLanPage, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true)
+     lanTv?.publish(lastLanPage, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true, sendAudioToTv)
    }
  }
  LaunchedEffect(page,followTv,track?.id) {
@@ -75,10 +75,12 @@ import kotlinx.coroutines.delay
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
       Text("Reproduzir áudio na TV",Modifier.weight(1f))
       Switch(checked=sendAudioToTv,onCheckedChange={ enabled ->
-        sendAudioToTv=enabled
-        if(enabled && lanTv?.hasPairedReceiver()==true) {
-          p?.pause()
-          Toast.makeText(shareContext,"Controle de áudio enviado à TV",Toast.LENGTH_SHORT).show()
+        if(enabled && lanTv?.hasPairedReceiver()!=true) {
+          Toast.makeText(shareContext,"Conecte primeiro a TV pelo código de pareamento",Toast.LENGTH_LONG).show()
+        } else {
+          sendAudioToTv=enabled
+          if(enabled) p?.pause()
+          else p?.play()
         }
       })
     }
