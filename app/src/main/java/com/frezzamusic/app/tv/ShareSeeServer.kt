@@ -136,7 +136,9 @@ class ShareSeeServer(private val context: Context) {
                 val start=Regex("<(?:\\w+:)?StartingIndex>(\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                 val max=Regex("<(?:\\w+:)?RequestedCount>(\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0,100) ?: 0
                 val all=tracks.get()
-                val entries=if(objectId=="0") all.drop(start).take(if(max==0)100 else max).mapIndexed { n,item ->
+                val metadata = body.contains("BrowseMetadata")
+                val root = """<container id="0" parentID="-1" restricted="1" childCount="${all.size}" searchable="0"><dc:title>FREZZAMUSIC - Biblioteca</dc:title><upnp:class>object.container.storageFolder</upnp:class></container>"""
+                val entries=if(metadata && objectId=="0") root else if(objectId=="0") all.drop(start).take(if(max==0)100 else max).mapIndexed { n,item ->
                     val idx=start+n
                     val title=escape(item.mediaMetadata.title?.toString() ?: "Música ${idx+1}")
                     val artist=escape(item.mediaMetadata.artist?.toString() ?: "")
@@ -144,7 +146,7 @@ class ShareSeeServer(private val context: Context) {
                     """<item id="$idx" parentID="0" restricted="1"><dc:title>$title</dc:title><upnp:artist>$artist</upnp:artist><upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo="http-get:*:audio/mpeg:*">$uri</res></item>"""
                 }.joinToString("") else ""
                 val didl="""<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">$entries</DIDL-Lite>"""
-                "<Result>${escape(didl)}</Result><NumberReturned>${if(objectId=="0") minOf(if(max==0)100 else max,(all.size-start).coerceAtLeast(0)) else 0}</NumberReturned><TotalMatches>${if(objectId=="0")all.size else 0}</TotalMatches><UpdateID>1</UpdateID>"
+                "<Result>${escape(didl)}</Result><NumberReturned>${if(metadata&&objectId=="0") 1 else if(objectId=="0") minOf(if(max==0)100 else max,(all.size-start).coerceAtLeast(0)) else 0}</NumberReturned><TotalMatches>${if(metadata&&objectId=="0") 1 else if(objectId=="0")all.size else 0}</TotalMatches><UpdateID>1</UpdateID>"
             }
             else -> ""
         }
