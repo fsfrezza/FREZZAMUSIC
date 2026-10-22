@@ -18,7 +18,7 @@ android {
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
         buildConfigField("String", "PURCHASE_API_URL", "\"" + (providers.gradleProperty("frezzamusicPurchaseApiUrl").orNull ?: "") + "\"")
     }
-    defaultConfig { resValue("string", "cast_receiver_app_id", "CC1AD845") }
+    defaultConfig { resValue("string", "cast_receiver_app_id", providers.gradleProperty("frezzamusicCastReceiverId").orNull ?: "CC1AD845") }
     flavorDimensions += "project"
     productFlavors {
         create("frezzamusic") {
