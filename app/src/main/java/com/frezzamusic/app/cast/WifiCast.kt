@@ -1,6 +1,7 @@
 package com.frezzamusic.app.cast
 
 import android.content.Context
+import com.frezzamusic.app.R
 import android.net.Uri
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
@@ -10,11 +11,14 @@ import com.google.android.gms.cast.framework.CastContext
 import org.json.JSONObject
 
 object WifiCast {
+    fun customReceiverConfigured(context: Context): Boolean =
+        context.getString(R.string.cast_receiver_app_id) != "CC1AD845"
+
     private const val NAMESPACE = "urn:x-cast:com.frezzamusic.lyrics"
 
     fun syncScreen(context: Context, page: Int, follow: Boolean, lrc: String?, title: String, artist: String) {
         val session = runCatching { CastContext.getSharedInstance(context).sessionManager.currentCastSession }.getOrNull() ?: return
-        if (!session.isConnected) return
+        if (!session.isConnected || !customReceiverConfigured(context)) return
         val payload = JSONObject().put("type", "display")
             .put("page", if (page == 1) "lyrics" else "now-playing")
             .put("follow", follow)
