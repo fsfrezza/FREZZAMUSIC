@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 43
-        versionName = "0.23.8-lan-tv"
+        versionCode = 44
+        versionName = "0.23.9-lan-tv-hotfix"
         buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
