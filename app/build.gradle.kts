@@ -11,13 +11,18 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.20.0"
+        versionCode = 34
+        versionName = "0.22.9"
+        buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
+        buildConfigField("String", "PURCHASE_API_URL", "\"" + (providers.gradleProperty("frezzamusicPurchaseApiUrl").orNull ?: "") + "\"")
     }
     flavorDimensions += "project"
     productFlavors {
         create("frezzamusic") {
             dimension = "project"
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.app"
             resValue("string", "app_name", "FREZZAMUSIC")
             buildConfigField("String", "PROJECT_MODE", "\"FREZZAMUSIC\"")
@@ -25,13 +30,15 @@ android {
         }
         create("solasias") {
             dimension = "project"
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("solasiasFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.solasias"
-            resValue("string", "app_name", "Solasias")
+            resValue("string", "app_name", "SOLASIAS")
             buildConfigField("String", "PROJECT_MODE", "\"SOLASIAS\"")
             buildConfigField("String", "ARTIST_FILTER", "\"Solasias\"")
         }
         create("thefrezza") {
             dimension = "project"
+            buildConfigField("String", "FIREBASE_APP_ID", "\"" + (providers.gradleProperty("thefrezzaFirebaseAppId").orNull ?: "") + "\"")
             applicationId = "com.frezzamusic.thefrezza"
             resValue("string", "app_name", "theFrezza")
             buildConfigField("String", "PROJECT_MODE", "\"THEFREZZA\"")
@@ -48,9 +55,13 @@ android {
 }
 
 dependencies {
+    implementation("org.jsoup:jsoup:1.18.3")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
     implementation(platform("androidx.compose:compose-bom:2025.01.00"))
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("com.mpatric:mp3agic:0.9.1")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
@@ -59,6 +70,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
@@ -68,4 +80,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     implementation("com.google.guava:guava:33.4.0-android")
+    implementation("com.google.firebase:firebase-auth:23.2.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.1")
 }

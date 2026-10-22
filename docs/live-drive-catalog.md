@@ -1,0 +1,15 @@
+# Atualização do catálogo online
+
+Os três aplicativos consultam as pastas públicas MP3 já utilizadas pelo catálogo. Cada subpasta representa um álbum; arquivos MP3 são ordenados pelo prefixo numérico. Imagens PNG/JPG/JPEG/WebP fornecem a capa, com preferência por nomes contendo capa, cover ou front. Novos álbuns recebem IDs derivados da pasta; os álbuns existentes preservam seus IDs para manter favoritos e listas.
+
+Na primeira instalação, o catálogo é obtido das pastas atuais do Drive, sem lista de álbuns embutida. Sem conexão, o app mostra que precisa consultar o catálogo, sem apresentar álbuns antigos. Um marcador no armazenamento sem backup impede que preferências restauradas pelo Android sejam usadas como catálogo inicial de uma reinstalação. Apenas aliases de identificadores antigos permanecem para preservar favoritos; não contêm nomes de álbuns ou faixas.
+
+Nas aberturas seguintes, o app mostra o último catálogo aprovado pelo usuário. Depois de 30 segundos em primeiro plano, consulta as pastas e compara nomes, álbuns, faixas e capas. A consulta não salva nem substitui a biblioteca. Se houver mudanças, mostra um resumo e pede confirmação: Atualizar aplica o resultado; Agora não ou fechar o diálogo preserva a biblioteca. Sem mudanças, não aparece diálogo. Uma consulta incompleta preserva o catálogo do artista que falhou.
+
+A opção Mais → Verificar atualizações automaticamente fica ativada inicialmente e pode ser desligada; a preferência é guardada no aparelho. Sair do app antes do prazo ou desligar a opção cancela a verificação pendente. Voltar ao primeiro plano inicia outro prazo de 30 segundos. A verificação ocorre uma vez por abertura, sem repetição contínua. Atualizar biblioteca continua disponível manualmente e é uma autorização explícita para aplicar o catálogo atual. Confirmações antigas são rejeitadas caso uma atualização manual já tenha alterado o catálogo.
+
+Solasias consulta apenas sua pasta; theFrezza consulta apenas sua pasta; FREZZAMUSIC consulta ambas. O cache guarda somente metadados, não os MP3. Não há credenciais pessoais dentro do APK e nenhuma permissão de compartilhamento é alterada.
+
+Limitação: a descoberta usa a visualização pública embeddedfolderview do Drive, que não é uma API estável documentada. Depende de acesso público e da estrutura HTML do Google. Páginas inválidas, erros de acesso e pastas com 100 ou mais itens são rejeitados para evitar aceitar uma listagem potencialmente incompleta. Uma mudança de formato do Google exige adaptação; o catálogo anterior permanece disponível com aviso. Para escala e operação de produção, migrar para um serviço de catálogo com Drive API autenticada no servidor e paginação documentada.
+
+Os testes também validam o prazo de 30 segundos com relógio virtual, cancelamento, confirmação, rejeição, comparações e proteção contra resultados antigos. Os testes usam capturas das duas raízes e do álbum Kaleidophrenia, validando descoberta, ordenação, capa, preservação dos IDs e rejeição de respostas inválidas/incompletas. Instalação, streaming e retorno de conexão ainda devem ser testados em aparelho.

@@ -1,0 +1,39 @@
+# Android — cliente de compras e downloads
+
+`PurchasedDownloadsApi` fornece duas operações autenticadas para os três aplicativos Android:
+
+- `purchasedTrackIds()`: consulta `GET /v1/me/entitlements` e devolve as faixas compradas.
+- `authorizeDownload(trackId)`: solicita `POST /v1/downloads/{trackId}/authorize` e valida HTTPS e a expiração da URL recebida.
+
+A classe recebe a URL HTTPS do backend e uma função suspensa `tokenProvider` que deverá obter um **Firebase ID token válido**. Ela não cria contas, não inventa tokens e não libera downloads por conta própria.
+
+**Pendente:** conectar Firebase Authentication ao Android, configurar a URL da API, implementar a interface Minhas Compras, baixar o arquivo com segurança para o armazenamento interno e tratar revogação. A classe foi adicionada como base de integração; ainda não está conectada à interface de compras nem ao repositório offline. Nenhuma cobrança ou download pago foi habilitado.
+
+## Armazenamento privado de downloads comprados
+O módulo `PurchasedAudioStorage` consulta os direitos no servidor, solicita URL assinada para a faixa e transfere o arquivo para o diretório interno do aplicativo. Usa arquivo temporário e substituição atômica após concluir a transferência. O nome do arquivo é derivado do SHA-256 do ID da faixa para impedir travessia de diretórios.
+
+**Ainda pendente:** vincular a classe às telas e ao player, autenticar o usuário com Firebase no Android, testar em dispositivos e tratar revogação/remoção de arquivos já baixados. O armazenamento interno evita exposição direta, mas não equivale a DRM; também é necessário limitar tamanho dos arquivos e reforçar a verificação de conteúdo antes da liberação em produção.
+
+## Limites de transferência
+O repositório de áudio comprado agora desabilita redirecionamentos HTTP(S) durante a transferência e impõe limite de 200 MB por arquivo, inclusive quando o servidor não informa Content-Length. Respostas incompletas ou acima do limite não são marcadas como baixadas. Antes da publicação, revisar limites conforme tamanho real do catálogo e incluir testes instrumentados de rede.
+
+## Interface Minhas Compras
+A tela `MyPurchasesScreen` está implementada e acessível por **Mais → Minhas Compras**. Com API autenticada, consulta direitos, lista faixas do catálogo e oferece baixar/remover; sem autenticação e URL de API configuradas, mostra um aviso explícito e não oferece download. Atualmente a navegação fornece `api=null` e `storage=null` de propósito, até que o login Firebase e o endereço HTTPS real do backend sejam configurados. A interface ainda não foi conectada ao player e não realiza pagamentos.
+
+O texto da seção Mais foi corrigido para deixar claro que baixar não significa qualidade de áudio superior ao streaming.
+
+## Firebase Authentication Android — configuração por aplicativo
+
+Foi incluída a classe `PurchaseIdentity`, que inicializa o Firebase Authentication com opções explícitas e fornece tokens de identidade para a API. A tela **Minhas Compras** oferece entrar e criar conta por e-mail e senha quando o serviço está configurado. O streaming gratuito continua sem exigir login.
+
+Forneça as propriedades Gradle `frezzamusicFirebaseApiKey`, `frezzamusicFirebaseAppId`, `frezzamusicFirebaseProjectId` e `frezzamusicPurchaseApiUrl` (HTTPS). Use o **mesmo projeto Firebase** nos três aplicativos e registre os três package names no console Firebase. Cada pacote tem um Firebase App ID próprio, configurado por flavor usando `frezzamusicFirebaseAppId`, `solasiasFirebaseAppId` e `thefrezzaFirebaseAppId`. O `frezzamusicFirebaseProjectId` e a API key são compartilhados no mesmo projeto Firebase. Não inclua credenciais administrativas no APK. Configure o projeto Firebase, ative autenticação por e-mail e senha, e configure o backend com o mesmo Firebase Project ID.
+
+A autenticação Google ainda não foi integrada. Sem as propriedades, a tela permanece indisponível e não inventa uma identidade. A configuração Gradle e o fluxo Android ainda exigem validação de build e testes em dispositivos.
+
+**Importante:** registre cada pacote Android no Firebase e forneça o respectivo App ID; não copie o mesmo App ID para os três pacotes. Os valores vazios continuam desabilitando o login e os downloads comprados, sem interferir na reprodução gratuita.
+
+## Reprodução dos downloads comprados
+O `PlaybackController` agora recebe a API de compras e o armazenamento privado. Ao montar uma nova fila de reprodução, consulta os direitos atuais no backend e usa o arquivo privado local apenas para faixas que continuam autorizadas. Sem login, sem conexão com o servidor ou sem direito confirmado, mantém o streaming gratuito como alternativa. A consulta remota pode introduzir atraso na preparação da fila; otimização de cache e reprodução totalmente offline dos arquivos pagos exigem uma política explícita de licenças e revogação. A fila já preparada não é reconstruída automaticamente quando o usuário sai da conta; esse cenário precisa de proteção adicional antes de produção.
+
+## Isolamento por conta
+Arquivos novos são armazenados em `purchased_audio_v2/<sha256(Firebase UID)>/<sha256(trackId)>.audio`, com marcação de download também vinculada ao usuário. Downloads legados de `purchased_audio` não são reaproveitados. Uma troca de usuário durante a transferência impede a conclusão do download. Ao sair da conta pela tela Minhas Compras, a fila do player é interrompida e limpa. O player também verifica se o UID permaneceu o mesmo durante a consulta de direitos. Não é criptografia/DRM: acesso ao armazenamento por dispositivo comprometido continua fora desta proteção. A reprodução offline paga ainda depende de consulta ao backend e de validação real em dispositivo.

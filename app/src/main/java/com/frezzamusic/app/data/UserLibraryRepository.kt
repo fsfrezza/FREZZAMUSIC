@@ -2,12 +2,14 @@ package com.frezzamusic.app.data
 import android.content.Context
 import com.frezzamusic.app.model.*
 import org.json.*
-class UserLibraryRepository(context: Context) { private val p=context.getSharedPreferences("user_library",Context.MODE_PRIVATE)
+class UserLibraryRepository(private val context: Context) { private val p=context.getSharedPreferences("user_library",Context.MODE_PRIVATE)
  fun artistImage(artist:String):String? = p.getString("artist_image:"+artist.lowercase(),null)
  fun setArtistImage(artist:String,uri:String){p.edit().putString("artist_image:"+artist.lowercase(),uri).apply()}
  fun clearArtistImage(artist:String){p.edit().remove("artist_image:"+artist.lowercase()).apply()}
  fun favorites():Set<String> = p.getStringSet("favorites", emptySet()) ?: emptySet()
  fun toggleFavorite(id:String){val s=favorites().toMutableSet();if(!s.add(id))s.remove(id);p.edit().putStringSet("favorites",s).apply()}
+ fun toggleFavorite(track:Track){val liked=track.id !in favorites();toggleFavorite(track.id);if(track.remote)GlobalRankingsRepository.get(context).queueLike(track,liked)}
+ fun onFavoritesChanged(callback:()->Unit):()->Unit {val listener=android.content.SharedPreferences.OnSharedPreferenceChangeListener{_,key->if(key=="favorites")callback()};p.registerOnSharedPreferenceChangeListener(listener);return {p.unregisterOnSharedPreferenceChangeListener(listener)}}
  fun playlists()=read("playlists").map{UserPlaylist(it.first,it.second.first,it.second.second)}
  fun queues()=read("queues").map{MusicQueue(it.first,it.second.first,it.second.second)}
  fun savePlaylist(x:UserPlaylist)=save("playlists",x.id,x.name,x.trackIds); fun saveQueue(x:MusicQueue)=save("queues",x.id,x.name,x.trackIds)
