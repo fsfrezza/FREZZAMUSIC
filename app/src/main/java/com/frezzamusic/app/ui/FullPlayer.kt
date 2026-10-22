@@ -50,8 +50,11 @@ import kotlinx.coroutines.delay
   if(track!=null && WifiCast.connected(shareContext)) {
     OutlinedButton(onClick={
       val url = p?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
-      WifiCast.send(shareContext,url,track.title,track.artist,track.album,p?.currentPosition?:0L) { ok,message ->
-        if(ok) p?.pause()
+      WifiCast.send(shareContext,url,track.title,track.artist,track.album,p?.currentPosition?:0L,track.lrc) { ok,message ->
+        if(ok) {
+          p?.pause()
+          if(followTv && page in 0..1) WifiCast.syncScreen(shareContext,page,true,track.lrc,track.title,track.artist)
+        }
         android.os.Handler(android.os.Looper.getMainLooper()).post {
           Toast.makeText(shareContext,message,Toast.LENGTH_LONG).show()
         }
