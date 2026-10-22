@@ -1,5 +1,6 @@
 package com.frezzamusic.app
 
+import com.frezzamusic.app.diagnostics.CrashReports
 import com.frezzamusic.app.links.SharedLinkRouter
 import com.frezzamusic.app.links.SharedContent
 import android.content.Intent
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashReports.install(applicationContext)
         if (SharedLinkRouter.forward(this, intent?.data)) { finish(); return }
         sharedUri = intent?.data
         folders = FolderMusicRepository(this)
@@ -133,6 +135,18 @@ enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
 @Composable
 fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUri: () -> Unit, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var pendingCrash by remember { mutableStateOf(CrashReports.hasPending(context)) }
+    if(pendingCrash) AlertDialog(
+        onDismissRequest={ CrashReports.acknowledge(context); pendingCrash=false },
+        title={Text("Falha encontrada na execução anterior")},
+        text={Text("Um relatório técnico foi salvo neste dispositivo. Você pode enviá-lo por e-mail, WhatsApp ou outro aplicativo. Nenhum dado será enviado sem sua autorização.")},
+        confirmButton={TextButton(onClick={
+            CrashReports.share(context)
+            CrashReports.acknowledge(context)
+            pendingCrash=false
+        }) { Text("Compartilhar relatório") }},
+        dismissButton={TextButton(onClick={CrashReports.acknowledge(context);pendingCrash=false}) {Text("Agora não")}}
+    )
     val user = remember { UserLibraryRepository(context) }
     val metadata = remember { MetadataConflictRepository(context) }
     var showConflictReview by remember { mutableStateOf(false) }
@@ -370,8 +384,8 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
-                AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
-                AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
+                AppTab.HOME -> HomeScreen(visibleLocalTracks, remoteTracks, user, allTracks, { CrashReports.action("play_from_home"); playback.play(it, allTracks); fullPlayerPage=0; playerExpanded=true }, { track -> playback.play(track, allTracks, playback.resumePosition(track.id)); fullPlayerPage=0; playerExpanded=true }, playback.lastTrackId()) { tab = AppTab.ONLINE }
+                AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { CrashReports.action("play_from_library"); playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
                 AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
                 AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled }, checkAppUpdate = checkAppUpdateManually, checkingAppUpdate = checkingAppUpdate, appUpdateStatus = appUpdateStatus)
@@ -713,6 +727,15 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
 
 @Composable
 private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit, checkAppUpdate: () -> Unit, checkingAppUpdate: Boolean, appUpdateStatus: String) {
+    val diagnosticContext = androidx.compose.ui.platform.LocalContext.current
+    var showDiagnostic by remember { mutableStateOf(false) }
+    if(showDiagnostic) AlertDialog(
+        onDismissRequest={showDiagnostic=false},
+        title={Text("Diagnóstico do aplicativo")},
+        text={Text("O relatório inclui versão, aparelho, erro capturado e rastreamento técnico quando disponível. Revise o conteúdo antes de enviar; nenhum envio é automático.")},
+        confirmButton={TextButton(onClick={CrashReports.share(diagnosticContext);showDiagnostic=false}){Text("Compartilhar")}},
+        dismissButton={TextButton(onClick={showDiagnostic=false}){Text("Fechar")}}
+    )
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -724,6 +747,11 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item {
             Text("Configurações", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick={showDiagnostic=true}) {
+                Icon(Icons.Default.BugReport,null)
+                Text(" Diagnóstico · Exportar relatório")
+            }
             Spacer(Modifier.height(12.dp))
             Text("Biblioteca local e catálogo online", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("Atualize as músicas do aparelho e os álbuns de Solasias e theFrezza no Drive.", style = MaterialTheme.typography.bodySmall)
