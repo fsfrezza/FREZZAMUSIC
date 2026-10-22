@@ -41,15 +41,16 @@ import kotlinx.coroutines.delay
  var lastLanPage by remember { mutableIntStateOf(0) }
  var showLanTv by remember { mutableStateOf(false) }
  var sendAudioToTv by remember { mutableStateOf(false) }
+ var tvAudioPaused by remember { mutableStateOf(false) }
  val serverForLifecycle = lanTv
  DisposableEffect(serverForLifecycle) { onDispose { serverForLifecycle?.stop() } }
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
  LaunchedEffect(page, followTv) { if (followTv) lastLanPage = page }
- LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying, sendAudioToTv) {
+ LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying, sendAudioToTv, tvAudioPaused) {
    if (track != null) {
-     lanTv?.publish(lastLanPage, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true, sendAudioToTv)
+     lanTv?.publish(lastLanPage, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true, sendAudioToTv && !tvAudioPaused)
    }
  }
  LaunchedEffect(page,followTv,track?.id) {
@@ -80,10 +81,17 @@ import kotlinx.coroutines.delay
           Toast.makeText(shareContext,"Conecte primeiro a TV pelo código de pareamento",Toast.LENGTH_LONG).show()
         } else {
           sendAudioToTv=enabled
+          tvAudioPaused=false
           if(enabled) p?.pause()
           else p?.play()
         }
       })
+    }
+  }
+  if(lanTv!=null && sendAudioToTv) {
+    TextButton(onClick={ tvAudioPaused=!tvAudioPaused }) {
+      Icon(if(tvAudioPaused) Icons.Default.PlayArrow else Icons.Default.Pause,null)
+      Text(if(tvAudioPaused) "Retomar áudio na TV" else "Pausar áudio na TV")
     }
   }
   if(lanTv!=null) {
