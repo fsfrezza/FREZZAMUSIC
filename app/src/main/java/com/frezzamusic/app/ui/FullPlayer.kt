@@ -65,7 +65,10 @@ import kotlinx.coroutines.delay
       Text("Tocar na TV via Wi-Fi")
     }
   }
-  if(track!=null && WifiCast.connected(shareContext)) {
+  if(track!=null && WifiCast.connected(shareContext) && !WifiCast.customReceiverConfigured(shareContext)) {
+    Text("Áudio Cast conectado. As telas Tocar e Letras exigem o receptor personalizado, ainda não ativado.",style=MaterialTheme.typography.labelSmall)
+  }
+  if(track!=null && WifiCast.connected(shareContext) && WifiCast.customReceiverConfigured(shareContext)) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
       Text("TV acompanha as abas",Modifier.weight(1f),style=MaterialTheme.typography.labelMedium)
       Switch(checked=followTv,onCheckedChange={ followTv=it })
