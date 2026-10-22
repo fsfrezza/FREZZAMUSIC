@@ -129,11 +129,11 @@ class LanTvServer(private val context: Context) {
             val partial=(remote?.responseCode==206)||(remote==null&&offset>0&&total>=0)
             val headers=buildString {
                 append("HTTP/1.1 ${if(partial) "206 Partial Content" else "200 OK"}\r\n")
-                append("Content-Type: $mime\\r\\n")
-                append("Accept-Ranges: bytes\\r\\n")
-                if(remaining>=0)append("Content-Length: $remaining\\r\\n")
-                if(partial&&total>=0)append("Content-Range: bytes $start-${total-1}/$total\\r\\n")
-                append("Cache-Control: no-store\\r\\nConnection: close\\r\\n\\r\\n")
+                append("Content-Type: $mime\r\n")
+                append("Accept-Ranges: bytes\r\n")
+                if(remaining>=0)append("Content-Length: $remaining\r\n")
+                if(partial&&total>=0)append("Content-Range: bytes $start-${total-1}/$total\r\n")
+                append("Cache-Control: no-store\r\nConnection: close\r\n\r\n")
             }
             val out=socket.getOutputStream()
             out.write(headers.toByteArray(Charsets.UTF_8))
