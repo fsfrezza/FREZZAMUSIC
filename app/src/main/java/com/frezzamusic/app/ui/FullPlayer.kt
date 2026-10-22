@@ -8,6 +8,8 @@ import com.frezzamusic.app.tv.DlnaDevice
 import com.frezzamusic.app.tv.DlnaDiscovery
 import com.frezzamusic.app.tv.DlnaTransport
 import android.widget.Toast
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -87,6 +89,12 @@ import kotlinx.coroutines.delay
     Icon(Icons.Default.LibraryMusic,null); Spacer(Modifier.width(8.dp))
     Text(if(shareSee==null)"Compartilhar músicas com Share&See" else "Desligar servidor Share&See")
   }
+  TextButton(onClick={
+    val intent=Intent(Settings.ACTION_CAST_SETTINGS)
+    if(intent.resolveActivity(shareContext.packageManager)!=null) {
+      shareContext.startActivity(intent)
+    } else Toast.makeText(shareContext,"Espelhamento Miracast indisponível neste Android.",Toast.LENGTH_LONG).show()
+  }) { Icon(Icons.Default.Cast,null); Text("Espelhamento de tela (se disponível)") }
   OutlinedButton(onClick={
     dlnaScanning=true
     showDlnaPicker=true
