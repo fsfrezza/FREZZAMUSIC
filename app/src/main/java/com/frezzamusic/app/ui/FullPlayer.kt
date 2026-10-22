@@ -2,6 +2,7 @@ package com.frezzamusic.app.ui
 
 import com.frezzamusic.app.links.SharedContent
 import com.frezzamusic.app.cast.WifiCast
+import com.frezzamusic.app.tv.LanTvServer
 import android.widget.Toast
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.mediarouter.app.MediaRouteButton
@@ -36,9 +37,17 @@ import kotlinx.coroutines.delay
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,requestVisualizerAccess:((Boolean)->Unit)->Unit,onPageChanged:(Int)->Unit,onClose:()->Unit){
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
+ var lanTv by remember { mutableStateOf<LanTvServer?>(null) }
+ var showLanTv by remember { mutableStateOf(false) }
+ DisposableEffect(lanTv) { onDispose { lanTv?.stop() } }
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
+ LaunchedEffect(lanTv, track?.id, page, pos, p?.isPlaying, followTv) {
+   if (track != null && (followTv || page in 0..1)) {
+     lanTv?.publish(if(followTv) page else 1, track.title, track.artist, track.album, track.lrc, pos, p?.isPlaying==true)
+   }
+ }
  LaunchedEffect(page,followTv,track?.id) {
    if(track!=null && followTv && page in 0..1) {
      WifiCast.syncScreen(shareContext,page,true,track.lrc,track.title,track.artist)
@@ -47,6 +56,21 @@ import kotlinx.coroutines.delay
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };AndroidView(factory={ctx->MediaRouteButton(ctx).also{CastButtonFactory.setUpMediaRouteButton(ctx,it)}},modifier=Modifier.size(44.dp));Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  OutlinedButton(onClick={
+    if(lanTv==null) {
+      val server=LanTvServer(shareContext.applicationContext)
+      if(server.start()) { lanTv=server; showLanTv=true }
+      else Toast.makeText(shareContext,"Não foi possível abrir a conexão Wi-Fi",Toast.LENGTH_LONG).show()
+    } else showLanTv=true
+  },modifier=Modifier.fillMaxWidth()) {
+    Icon(Icons.Default.Wifi,null);Spacer(Modifier.width(8.dp));Text("Conectar TV pelo Wi-Fi (sem Cast)")
+  }
+  if(lanTv!=null) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+      Text("TV acompanha abas",Modifier.weight(1f))
+      Switch(checked=followTv,onCheckedChange={followTv=it})
+    }
+  }
   if(track!=null && WifiCast.connected(shareContext)) {
     OutlinedButton(onClick={
       val url = p?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
@@ -84,6 +108,16 @@ import kotlinx.coroutines.delay
   TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
   when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
  }
+ if(showLanTv && lanTv!=null) AlertDialog(onDismissRequest={showLanTv=false},
+   title={Text("Conectar TV pelo Wi-Fi")},
+   text={Column {
+     Text("Na TV, abra o navegador e digite:")
+     Text(lanTv?.address ?: "Wi-Fi indisponível",fontWeight=FontWeight.Bold)
+     Text("Código de pareamento: ${lanTv?.pairingCode}")
+     Text("O celular e a TV precisam estar na mesma rede. O áudio continua no celular nesta fase; a TV mostra o estado do player.")
+   }},
+   confirmButton={TextButton(onClick={showLanTv=false}){Text("Concluído")}},
+   dismissButton={TextButton(onClick={lanTv?.stop();lanTv=null;showLanTv=false}){Text("Desconectar")}})
  if(playlistPicker&&track!=null)AlertDialog(onDismissRequest={playlistPicker=false},title={Text("Adicionar à lista")},text={Column{val playlists=user.playlists();if(playlists.isEmpty())Text("Nenhuma lista criada.") else playlists.forEach{pl->TextButton(onClick={user.addToPlaylist(pl.id,track.id);playlistPicker=false},modifier=Modifier.fillMaxWidth()){Text(pl.name)}}}},confirmButton={TextButton({playlistPicker=false}){Text("Fechar")}})
  if(support)AlertDialog(onDismissRequest={support=false},icon={Icon(Icons.Default.Favorite,null)},title={Text("Gostou desta música? Apoie o projeto")},text={Text("Todas as músicas podem ser ouvidas gratuitamente. Sua contribuição ajuda a manter o aplicativo e a produção de novas músicas. Como agradecimento, o download em alta qualidade será liberado quando o sistema de contribuições estiver ativo.\n\nFaixa: ${SupportPricing.formatBrl(track?.downloadPriceBrl ?: SupportPricing.TRACK_PRICE_BRL)}. Álbuns: ${SupportPricing.formatBrl(SupportPricing.albumPrice(8))} a ${SupportPricing.formatBrl(SupportPricing.albumPrice(17))}, conforme a quantidade de faixas.")},confirmButton={TextButton({support=false}){Text("Entendi")}},dismissButton={TextButton({support=false}){Text("Agora não")}})
 }
