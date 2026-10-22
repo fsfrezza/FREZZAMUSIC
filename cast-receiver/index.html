@@ -12,17 +12,17 @@ cast-media-player{position:fixed;inset:0;width:100%;height:100%}
 #title{font-size:3.4vw;font-weight:700;margin:2vh 0}#artist{font-size:2.1vw;color:#cbd5e5}
 #lyrics{font-size:3.4vw;font-weight:700;max-width:90%;line-height:1.3;margin:3vw 0}
 #next{font-size:2.1vw;color:#aabdd4}#art{font-size:14vw;line-height:1}
-#time{font-size:1.6vw;color:#aec7dd;margin-top:3vh}
+#time{font-size:1.6vw;color:#aec7dd;margin-top:3vh}#cover{width:min(28vh,20vw);height:min(28vh,20vw);object-fit:cover;border-radius:1vw;box-shadow:0 1vw 3vw #0008}#track{width:74%;height:.5vw;background:#ffffff33;border-radius:10px;overflow:hidden;margin-top:2vw}#progress{height:100%;width:0%;background:#81d8f7}
 </style></head><body>
 <cast-media-player></cast-media-player>
-<section id="view"><div id="app">FREZZAMUSIC · TV</div><div id="art">♫</div>
+<section id="view"><div id="app">FREZZAMUSIC · TV</div><img id="cover" alt="" hidden><div id="art">♫</div>
 <div id="title"></div><div id="artist"></div>
-<div id="lyrics" hidden></div><div id="next" hidden></div><div id="time"></div></section>
+<div id="lyrics" hidden></div><div id="next" hidden></div><div id="track"><div id="progress"></div></div><div id="time"></div></section>
 <script>
 'use strict';
 const ctx=cast.framework.CastReceiverContext.getInstance(),player=ctx.getPlayerManager();
 const NS='urn:x-cast:com.frezzamusic.lyrics';
-let state={page:'now-playing',follow:true,lrc:'',title:'',artist:''},cues=[];
+let state={page:'now-playing',follow:true,lrc:'',title:'',artist:'',artwork:''},cues=[];
 const by=id=>document.getElementById(id);
 function parseLrc(raw){
  const out=[],rx=/\[(\d+):(\d+(?:\.\d+)?)\]/g;
@@ -35,7 +35,10 @@ function parseLrc(raw){
 function render(){
  by('title').textContent=state.title;
  by('artist').textContent=state.artist;
- by('art').hidden=state.page==='lyrics' && cues.length>0;
+ const showLyrics=state.page==='lyrics'&&cues.length>0;
+ by('art').hidden=showLyrics || !!state.artwork;
+ by('cover').hidden=showLyrics || !state.artwork;
+ if(state.artwork && by('cover').src!==state.artwork)by('cover').src=state.artwork;
  by('lyrics').hidden=state.page!=='lyrics'||!cues.length;
  by('next').hidden=state.page!=='lyrics'||!cues.length;
 }
@@ -43,6 +46,7 @@ function update(data){
  if(!data||typeof data!=='object')return;
  if(typeof data.title==='string')state.title=data.title.slice(0,250);
  if(typeof data.artist==='string')state.artist=data.artist.slice(0,250);
+ if(typeof data.artwork==='string'&&/^https:\/\//i.test(data.artwork))state.artwork=data.artwork.slice(0,2000);
  if(typeof data.lrc==='string'&&data.lrc!==state.lrc){state.lrc=data.lrc.slice(0,60000);cues=parseLrc(state.lrc);}
  if(typeof data.follow==='boolean')state.follow=data.follow;
  if(data.page==='lyrics'||data.page==='now-playing'){if(state.follow || !data.follow)state.page=data.page;}
@@ -53,6 +57,7 @@ player.setMessageInterceptor(cast.framework.messages.MessageType.LOAD,request=>{
  const media=request.media||{},data=request.customData||{};
  state.title=media.metadata?.title||'';
  state.artist=media.metadata?.artist||'';
+ state.artwork=media.metadata?.images?.[0]?.url||'';
  if(typeof data.lrc==='string')update(data);
  render();return request;
 });
