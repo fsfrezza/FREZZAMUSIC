@@ -5,6 +5,7 @@ import android.net.Uri
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
 import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.common.images.WebImage
 import com.google.android.gms.cast.framework.CastContext
 import org.json.JSONObject
 
@@ -26,7 +27,7 @@ object WifiCast {
         CastContext.getSharedInstance(context).sessionManager.currentCastSession?.isConnected == true
     }.getOrDefault(false)
 
-    fun send(context: Context, uri: String, title: String, artist: String, album: String, positionMs: Long, lrc: String?, callback: (Boolean, String) -> Unit) {
+    fun send(context: Context, uri: String, title: String, artist: String, album: String, positionMs: Long, lrc: String?, artwork: String?, callback: (Boolean, String) -> Unit) {
         val scheme = Uri.parse(uri).scheme?.lowercase()
         if (scheme !in listOf("http", "https")) {
             callback(false, "Áudio local ainda não pode ser enviado à TV; tente uma música online.")
@@ -51,6 +52,9 @@ object WifiCast {
             putString(MediaMetadata.KEY_TITLE, title)
             putString(MediaMetadata.KEY_ARTIST, artist)
             putString(MediaMetadata.KEY_ALBUM_TITLE, album)
+            if (artwork?.startsWith("https://", ignoreCase = true) == true) {
+                addImage(WebImage(Uri.parse(artwork)))
+            }
         }
         val media = MediaInfo.Builder(uri).setContentType(mime)
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED).setMetadata(metadata).build()
