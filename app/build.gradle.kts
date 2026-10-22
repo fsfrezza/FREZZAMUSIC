@@ -107,3 +107,25 @@ dependencies {
     implementation("com.google.firebase:firebase-auth:23.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.1")
 }
+
+
+/**
+ * Compatibility with the legacy distribution workflow, which still copies
+ * filenames ending in -unsigned.apk. These staged files contain the exact
+ * signed APK bytes, never an unsigned build. Remove when the legacy workflow
+ * itself is migrated.
+ */
+val stageSignedApksForLegacyWorkflow = tasks.register("stageSignedApksForLegacyWorkflow") {
+    doLast {
+        listOf("frezzamusic", "solasias", "thefrezza").forEach { flavor ->
+            val dir = layout.buildDirectory.dir("outputs/apk/$flavor/release").get().asFile
+            val signed = dir.resolve("app-$flavor-release.apk")
+            require(signed.isFile) { "Signed release APK missing: $signed" }
+            val legacy = dir.resolve("app-$flavor-release-unsigned.apk")
+            signed.copyTo(legacy, overwrite = true)
+        }
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy(stageSignedApksForLegacyWorkflow)
+}
