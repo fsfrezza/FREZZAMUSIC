@@ -3,6 +3,7 @@ package com.frezzamusic.app.ui
 import com.frezzamusic.app.links.SharedContent
 import com.frezzamusic.app.cast.WifiCast
 import com.frezzamusic.app.tv.LanTvServer
+import com.frezzamusic.app.tv.ShareSeeServer
 import com.frezzamusic.app.tv.DlnaDevice
 import com.frezzamusic.app.tv.DlnaDiscovery
 import com.frezzamusic.app.tv.DlnaTransport
@@ -37,6 +38,13 @@ import kotlinx.coroutines.delay
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,requestVisualizerAccess:((Boolean)->Unit)->Unit,onPageChanged:(Int)->Unit,onClose:()->Unit){
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
+ var shareSee by remember { mutableStateOf<ShareSeeServer?>(null) }
+ val activeShareSee=shareSee
+ DisposableEffect(activeShareSee) { onDispose { activeShareSee?.stop() } }
+ LaunchedEffect(shareSee,pc.controller?.mediaItemCount) {
+   val player=pc.controller
+   if(player!=null) shareSee?.update((0 until player.mediaItemCount).map { player.getMediaItemAt(it) })
+ }
  var dlnaDevices by remember { mutableStateOf<List<DlnaDevice>>(emptyList()) }
  var dlnaScanning by remember { mutableStateOf(false) }
  var showDlnaPicker by remember { mutableStateOf(false) }
@@ -65,6 +73,20 @@ import kotlinx.coroutines.delay
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  OutlinedButton(onClick={
+    if(shareSee==null){
+      val server=ShareSeeServer(shareContext.applicationContext)
+      if(server.start()) {
+        shareSee=server
+        val player=pc.controller
+        if(player!=null)server.update((0 until player.mediaItemCount).map {player.getMediaItemAt(it)})
+        Toast.makeText(shareContext,"Servidor Share&See ativo. Abra Share&See na TCL.",Toast.LENGTH_LONG).show()
+      }else Toast.makeText(shareContext,"Não foi possível iniciar o servidor DLNA.",Toast.LENGTH_LONG).show()
+    }else {shareSee?.stop();shareSee=null}
+  },modifier=Modifier.fillMaxWidth()) {
+    Icon(Icons.Default.LibraryMusic,null); Spacer(Modifier.width(8.dp))
+    Text(if(shareSee==null)"Compartilhar músicas com Share&See" else "Desligar servidor Share&See")
+  }
   OutlinedButton(onClick={
     dlnaScanning=true
     showDlnaPicker=true
