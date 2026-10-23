@@ -10,6 +10,8 @@ import com.frezzamusic.app.tv.DlnaTransport
 import android.widget.Toast
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -40,6 +42,7 @@ import kotlinx.coroutines.delay
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,requestVisualizerAccess:((Boolean)->Unit)->Unit,onPageChanged:(Int)->Unit,onClose:()->Unit){
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
+ var showTvConnections by remember { mutableStateOf(false) }
  var shareSee by remember { mutableStateOf<ShareSeeServer?>(null) }
  val activeShareSee=shareSee
  DisposableEffect(activeShareSee) { onDispose { activeShareSee?.stop() } }
@@ -61,6 +64,10 @@ import kotlinx.coroutines.delay
  val p=pc.controller; var page by remember{mutableIntStateOf(0)}; LaunchedEffect(page){onPageChanged(page)}; var pos by remember{mutableLongStateOf(p?.currentPosition?:0L)}; var support by remember{mutableStateOf(false)}; var playlistPicker by remember{mutableStateOf(false)}
  LaunchedEffect(p?.isPlaying,p?.currentMediaItemIndex){while(true){pos=p?.currentPosition?:0L;delay(500)}}
  val dur=(p?.duration?:0L).coerceAtLeast(0L)
+  LaunchedEffect(lanTv,track?.id,p?.currentMediaItem?.localConfiguration?.uri) {
+    lanTv?.setAudioSource(p?.currentMediaItem?.localConfiguration?.uri?.toString())
+  }
+
  LaunchedEffect(page, followTv) { if (followTv) lastLanPage = page }
  LaunchedEffect(lanTv, track?.id, lastLanPage, pos, p?.isPlaying, sendAudioToTv, tvAudioPaused) {
    if (track != null) {
@@ -75,6 +82,23 @@ import kotlinx.coroutines.delay
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
+  OutlinedButton(onClick={ showTvConnections=true }, modifier=Modifier.fillMaxWidth()) {
+    Icon(Icons.Default.Tv,null)
+    Spacer(Modifier.width(8.dp))
+    Text("Conectar à TV")
+  }
+  TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
+  when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
+ }
+ if(showTvConnections) AlertDialog(
+    onDismissRequest={ showTvConnections=false },
+    title={Text("Conectar à TV")},
+    text={
+      Column(
+        modifier=Modifier.fillMaxWidth().heightIn(max=440.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement=Arrangement.spacedBy(8.dp)
+      ) {
+        Text("Escolha uma forma de conexão:",style=MaterialTheme.typography.bodySmall)
   OutlinedButton(onClick={
     if(shareSee==null){
       val server=ShareSeeServer(shareContext.applicationContext)
@@ -130,9 +154,6 @@ import kotlinx.coroutines.delay
     } else showLanTv=true
   },modifier=Modifier.fillMaxWidth()) {
     Icon(Icons.Default.Wifi,null);Spacer(Modifier.width(8.dp));Text("Conectar TV pelo Wi-Fi (sem Cast)")
-  }
-  LaunchedEffect(lanTv,track?.id,p?.currentMediaItem?.localConfiguration?.uri) {
-    lanTv?.setAudioSource(p?.currentMediaItem?.localConfiguration?.uri?.toString())
   }
   if(lanTv!=null) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -195,9 +216,11 @@ import kotlinx.coroutines.delay
     }
     Text("Na TV: Tocar e Letras. Fila e Áudio mantêm a última tela compatível.",style=MaterialTheme.typography.labelSmall)
   }
-  TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
-  when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
- }
+
+      }
+    },
+    confirmButton={TextButton(onClick={showTvConnections=false}){Text("Fechar")}}
+ )
  if(showDlnaPicker) AlertDialog(
    onDismissRequest={showDlnaPicker=false},
    title={Text("TVs disponíveis no Wi-Fi")},
