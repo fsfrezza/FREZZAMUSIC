@@ -42,7 +42,6 @@ import kotlinx.coroutines.delay
 @Composable fun FullPlayer(track:Track?,pc:PlaybackController,user:com.frezzamusic.app.data.UserLibraryRepository,requestVisualizerAccess:((Boolean)->Unit)->Unit,onPageChanged:(Int)->Unit,onClose:()->Unit){
  val shareContext = androidx.compose.ui.platform.LocalContext.current
  var followTv by remember { mutableStateOf(true) }
- var showTvConnections by remember { mutableStateOf(false) }
  var shareSee by remember { mutableStateOf<ShareSeeServer?>(null) }
  val activeShareSee=shareSee
  DisposableEffect(activeShareSee) { onDispose { activeShareSee?.stop() } }
@@ -82,145 +81,9 @@ import kotlinx.coroutines.delay
  Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
-  OutlinedButton(onClick={ showTvConnections=true }, modifier=Modifier.fillMaxWidth()) {
-    Icon(Icons.Default.Tv,null)
-    Spacer(Modifier.width(8.dp))
-    Text("Conectar à TV")
-  }
   TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
   when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
  }
- if(showTvConnections) AlertDialog(
-    onDismissRequest={ showTvConnections=false },
-    title={Text("Conectar à TV")},
-    text={
-      Column(
-        modifier=Modifier.fillMaxWidth().heightIn(max=440.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement=Arrangement.spacedBy(8.dp)
-      ) {
-        Text("Escolha uma forma de conexão:",style=MaterialTheme.typography.bodySmall)
-  OutlinedButton(onClick={
-    if(shareSee==null){
-      val server=ShareSeeServer(shareContext.applicationContext)
-      if(server.start()) {
-        shareSee=server
-        val player=pc.controller
-        if(player!=null)server.update((0 until player.mediaItemCount).map {player.getMediaItemAt(it)})
-        Toast.makeText(shareContext,"Servidor Share&See ativo. Abra Share&See na TCL.",Toast.LENGTH_LONG).show()
-      }else Toast.makeText(shareContext,"Não foi possível iniciar o servidor DLNA.",Toast.LENGTH_LONG).show()
-    }else {shareSee?.stop();shareSee=null}
-  },modifier=Modifier.fillMaxWidth()) {
-    Icon(Icons.Default.LibraryMusic,null); Spacer(Modifier.width(8.dp))
-    Text(if(shareSee==null)"Compartilhar músicas com Share&See" else "Desligar servidor Share&See")
-  }
-  TextButton(onClick={
-    val intent=Intent(Settings.ACTION_CAST_SETTINGS)
-    if(intent.resolveActivity(shareContext.packageManager)!=null) {
-      shareContext.startActivity(intent)
-    } else Toast.makeText(shareContext,"Espelhamento Miracast indisponível neste Android.",Toast.LENGTH_LONG).show()
-  }) { Icon(Icons.Default.Cast,null); Text("Espelhamento de tela (se disponível)") }
-  OutlinedButton(onClick={
-    dlnaScanning=true
-    showDlnaPicker=true
-    DlnaDiscovery.scan(shareContext) { devices, error ->
-      dlnaDevices=devices
-      dlnaScanning=false
-      if(error!=null) Toast.makeText(shareContext,error,Toast.LENGTH_LONG).show()
-    }
-  },modifier=Modifier.fillMaxWidth()) {
-    Icon(Icons.Default.Tv,null)
-    Spacer(Modifier.width(8.dp))
-    Text(if(dlnaScanning) "Procurando TVs..." else "Procurar TVs na rede Wi-Fi")
-  }
-  if(activeDlna!=null) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-      Text("TV: ${activeDlna?.name}",Modifier.weight(1f),maxLines=1)
-      TextButton(onClick={
-        activeDlna?.let { device -> DlnaTransport.pause(device) { } }
-        activeDlna=null
-        p?.play()
-      }) { Text("Desconectar") }
-    }
-    Row {
-      TextButton(onClick={activeDlna?.let{device->DlnaTransport.pause(device){}}}){Text("Pausar TV")}
-      TextButton(onClick={activeDlna?.let{device->DlnaTransport.resume(device){}}}){Text("Retomar TV")}
-    }
-  }
-  OutlinedButton(onClick={
-    if(lanTv==null) {
-      val server=LanTvServer(shareContext.applicationContext)
-      if(server.start()) { lanTv=server; showLanTv=true }
-      else Toast.makeText(shareContext,"Não foi possível abrir a conexão Wi-Fi",Toast.LENGTH_LONG).show()
-    } else showLanTv=true
-  },modifier=Modifier.fillMaxWidth()) {
-    Icon(Icons.Default.Wifi,null);Spacer(Modifier.width(8.dp));Text("Conectar TV pelo Wi-Fi (sem Cast)")
-  }
-  if(lanTv!=null) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-      Text("Reproduzir áudio na TV",Modifier.weight(1f))
-      Switch(checked=sendAudioToTv,onCheckedChange={ enabled ->
-        if(enabled && lanTv?.hasPairedReceiver()!=true) {
-          Toast.makeText(shareContext,"Conecte primeiro a TV pelo código de pareamento",Toast.LENGTH_LONG).show()
-        } else {
-          sendAudioToTv=enabled
-          tvAudioPaused=false
-          if(enabled) p?.pause()
-          else p?.play()
-        }
-      })
-    }
-  }
-  if(lanTv!=null && sendAudioToTv) {
-    TextButton(onClick={ tvAudioPaused=!tvAudioPaused }) {
-      Icon(if(tvAudioPaused) Icons.Default.PlayArrow else Icons.Default.Pause,null)
-      Text(if(tvAudioPaused) "Retomar áudio na TV" else "Pausar áudio na TV")
-    }
-  }
-  if(lanTv!=null) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-      Text("TV acompanha abas",Modifier.weight(1f))
-      Switch(checked=followTv,onCheckedChange={followTv=it})
-    }
-  }
-  if(track!=null && WifiCast.connected(shareContext)) {
-    OutlinedButton(onClick={
-      val url = p?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
-      WifiCast.send(shareContext,url,track.title,track.artist,track.album,p?.currentPosition?:0L,track.lrc,track.artwork) { ok,message ->
-        if(ok) {
-          p?.pause()
-          if(followTv && page in 0..1) WifiCast.syncScreen(shareContext,page,true,track.lrc,track.title,track.artist)
-        }
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-          Toast.makeText(shareContext,message,Toast.LENGTH_LONG).show()
-        }
-      }
-    },modifier=Modifier.fillMaxWidth()) {
-      Icon(Icons.Default.CastConnected,null)
-      Spacer(Modifier.width(8.dp))
-      Text("Tocar na TV via Wi-Fi")
-    }
-  }
-  if(track!=null && WifiCast.connected(shareContext) && !WifiCast.customReceiverConfigured(shareContext)) {
-    Text("Áudio Cast conectado. As telas Tocar e Letras exigem o receptor personalizado, ainda não ativado.",style=MaterialTheme.typography.labelSmall)
-  }
-  if(track!=null && WifiCast.connected(shareContext) && WifiCast.customReceiverConfigured(shareContext)) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-      Text("TV acompanha as abas",Modifier.weight(1f),style=MaterialTheme.typography.labelMedium)
-      Switch(checked=followTv,onCheckedChange={ followTv=it })
-    }
-    if(!followTv) {
-      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Center) {
-        TextButton(onClick={ WifiCast.syncScreen(shareContext,0,false,track.lrc,track.title,track.artist) }) { Text("TV: Tocar") }
-        TextButton(onClick={ WifiCast.syncScreen(shareContext,1,false,track.lrc,track.title,track.artist) }) { Text("TV: Letras") }
-      }
-    }
-    Text("Na TV: Tocar e Letras. Fila e Áudio mantêm a última tela compatível.",style=MaterialTheme.typography.labelSmall)
-  }
-
-      }
-    },
-    confirmButton={TextButton(onClick={showTvConnections=false}){Text("Fechar")}}
- )
  if(showDlnaPicker) AlertDialog(
    onDismissRequest={showDlnaPicker=false},
    title={Text("TVs disponíveis no Wi-Fi")},
