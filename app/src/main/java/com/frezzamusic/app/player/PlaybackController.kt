@@ -2,6 +2,7 @@ package com.frezzamusic.app.player
 
 import android.content.ComponentName
 import android.content.Context
+import com.frezzamusic.app.diagnostics.CrashReports
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -105,6 +106,7 @@ class PlaybackController(
     }
 
     fun play(track: Track, queue: List<Track>, positionMs: Long = 0L) {
+        CrashReports.action("play_track")
         scope.launch {
             val start = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
             // Revalidate rights before using paid files. Streaming remains the fallback.
@@ -126,7 +128,7 @@ class PlaybackController(
         if (settings.lastTrackId == trackId) settings.lastPositionMs else 0L
 
     fun lastTrackId(): String? = settings.lastTrackId
-    fun toggle() { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
+    fun toggle() { CrashReports.action("toggle_playback"); controller?.let { if (it.isPlaying) it.pause() else it.play() } }
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
     fun seek(ms: Long) { controller?.seekTo(ms) }

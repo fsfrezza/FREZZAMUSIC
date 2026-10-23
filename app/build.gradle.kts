@@ -11,8 +11,8 @@ android {
         applicationId = "com.frezzamusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "0.23.7-wifi-tv"
+        versionCode = 49
+        versionName = "0.23.14-tv-hidden"
         buildConfigField("String", "RANKINGS_API_URL", "\"https://frezzamusic-global-rankings.fondfield256.chatgpt.site\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"" + (providers.gradleProperty("frezzamusicFirebaseApiKey").orNull ?: "") + "\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"" + (providers.gradleProperty("frezzamusicFirebaseProjectId").orNull ?: "") + "\"")
@@ -63,7 +63,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (releaseStore != null) signingConfig = signingConfigs.getByName("production")
+            signingConfig = if (releaseStore != null) signingConfigs.getByName("production") else signingConfigs.getByName("debug")
         }
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -106,4 +106,26 @@ dependencies {
     implementation("com.google.guava:guava:33.4.0-android")
     implementation("com.google.firebase:firebase-auth:23.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.1")
+}
+
+
+/**
+ * Compatibility with the legacy distribution workflow, which still copies
+ * filenames ending in -unsigned.apk. These staged files contain the exact
+ * signed APK bytes, never an unsigned build. Remove when the legacy workflow
+ * itself is migrated.
+ */
+val stageSignedApksForLegacyWorkflow = tasks.register("stageSignedApksForLegacyWorkflow") {
+    doLast {
+        listOf("frezzamusic", "solasias", "thefrezza").forEach { flavor ->
+            val dir = layout.buildDirectory.dir("outputs/apk/$flavor/release").get().asFile
+            val signed = dir.resolve("app-$flavor-release.apk")
+            require(signed.isFile) { "Signed release APK missing: $signed" }
+            val legacy = dir.resolve("app-$flavor-release-unsigned.apk")
+            signed.copyTo(legacy, overwrite = true)
+        }
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy(stageSignedApksForLegacyWorkflow)
 }

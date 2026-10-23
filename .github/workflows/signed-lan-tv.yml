@@ -1,0 +1,49 @@
+name: Signed LAN TV installable APKs
+
+on:
+  push:
+    branches: [feature/lan-tv-receiver]
+    paths:
+      - 'app/**'
+      - 'scripts/check_apk_signature.py'
+      - '.github/workflows/signed-lan-tv.yml'
+  workflow_dispatch:
+
+jobs:
+  signed-release-apks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build signed optimized release variants
+        run: gradle :app:assembleFrezzamusicRelease :app:assembleSolasiasRelease :app:assembleThefrezzaRelease --no-daemon --stacktrace
+      - name: Validate manifests and R8 output
+        run: python3 scripts/verify-release-build.py
+      - name: Check signing with Android apksigner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find app/build/outputs/apk -name '*.apk' -path '*/release/*' | sort)
+          test "${#apks[@]}" -eq 3
+          for apk in "${apks[@]}"; do
+            python3 scripts/check_apk_signature.py "$apk"
+            find "$ANDROID_HOME/build-tools" -name apksigner -type f -print | sort -V | tail -1 | xargs -I '{}' '{}' verify --verbose "$apk"
+          done
+      - name: Package with original names
+        shell: bash
+        run: |
+          mkdir -p distribution
+          cp app/build/outputs/apk/frezzamusic/release/app-frezzamusic-release.apk distribution/FREZZAMUSIC.apk
+          cp app/build/outputs/apk/solasias/release/app-solasias-release.apk distribution/SOLASIAS.apk
+          cp app/build/outputs/apk/thefrezza/release/app-thefrezza-release.apk distribution/theFrezza.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-lan-tv-v0238
+          path: distribution/*.apk
+          if-no-files-found: error
