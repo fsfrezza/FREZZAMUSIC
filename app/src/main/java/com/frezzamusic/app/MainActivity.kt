@@ -1,5 +1,7 @@
 package com.frezzamusic.app
 
+import com.frezzamusic.app.links.SharedLinkRouter
+import com.frezzamusic.app.links.SharedContent
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -48,6 +50,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
+    private var sharedUri by mutableStateOf<Uri?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (SharedLinkRouter.forward(this, intent.data)) { finish(); return }
+        sharedUri = intent.data
+    }
+
     private lateinit var folders: FolderMusicRepository
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var mediaPermissionResult: ((Boolean) -> Unit)? = null
@@ -82,12 +93,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (SharedLinkRouter.forward(this, intent?.data)) { finish(); return }
+        sharedUri = intent?.data
         folders = FolderMusicRepository(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         setContent {
             FrezzaTheme {
                 FrezzaMusicApp(
                     repo = folders,
+                    sharedUri = sharedUri,
+                    consumeSharedUri = { sharedUri = null },
                     requestFolderWrite = { track, callback ->
                         val target = Uri.parse(track.uri)
                         val matching = folders.folders().firstOrNull { tree ->
@@ -116,7 +131,7 @@ class MainActivity : ComponentActivity() {
 enum class AppTab { HOME, LIBRARY, ONLINE, PLAYLISTS, MORE }
 
 @Composable
-fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
+fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUri: () -> Unit, requestFolderWrite: (Track, (Uri?) -> Unit) -> Unit, pickFolder: ((() -> Unit)) -> Unit, pickArtistImage: (((Uri) -> Unit)) -> Unit, requestMediaAccess: ((Boolean) -> Unit) -> Unit, requestVisualizerAccess: ((Boolean) -> Unit) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val user = remember { UserLibraryRepository(context) }
     val metadata = remember { MetadataConflictRepository(context) }
@@ -153,6 +168,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var catalogLoaded by remember { mutableStateOf(false) }
     val liveCatalog = remember { LiveDriveCatalog(context) }
     var catalogStatus by remember { mutableStateOf(liveCatalog.status()) }
     var automaticCatalogCheck by remember { mutableStateOf(settings.autoCatalogCheck) }
@@ -172,6 +188,41 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
         playback.onChanged = { changeCounter++ }
         playback.connect()
         onDispose { playback.release() }
+    }
+
+    val appUpdates = remember { AppUpdateRepository() }
+    var pendingAppUpdate by remember { mutableStateOf<AppRelease?>(null) }
+    var checkingAppUpdate by remember { mutableStateOf(false) }
+    var appUpdateStatus by remember { mutableStateOf("") }
+    var offeredAppVersion by remember { mutableIntStateOf(0) }
+    suspend fun checkAppUpdate(manual: Boolean = false) {
+        if (checkingAppUpdate) return
+        checkingAppUpdate = true
+        if (manual) appUpdateStatus = "Verificando nova versão…"
+        try {
+            val release = appUpdates.check(BuildConfig.APPLICATION_ID, BuildConfig.VERSION_CODE)
+            appUpdateStatus = if (release == null) "Você está usando a versão mais recente." else "Versão ${release.versionName} disponível."
+            if (release != null && (manual || release.versionCode != offeredAppVersion)) {
+                offeredAppVersion = release.versionCode
+                pendingAppUpdate = release
+            }
+        } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (_: Exception) { if (manual) appUpdateStatus = "Não foi possível verificar. Confira a conexão e tente novamente." }
+        finally { checkingAppUpdate = false }
+    }
+    val checkAppUpdateManually: () -> Unit = { editScope.launch { checkAppUpdate(manual = true) }; Unit }
+    pendingAppUpdate?.let { release ->
+        AlertDialog(onDismissRequest = { pendingAppUpdate = null },
+            title = { Text("Nova versão disponível") },
+            text = { Text("A versão ${release.versionName} está disponível. Deseja baixar e atualizar? O Android pedirá sua confirmação para instalar. Suas músicas e configurações serão mantidas na atualização.") },
+            confirmButton = { TextButton(onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl)))
+                    pendingAppUpdate = null
+                    appUpdateStatus = "Após baixar o APK, abra o arquivo e confirme a atualização no Android."
+                } catch (_: Exception) { appUpdateStatus = "Não foi possível abrir o download. Tente novamente."; pendingAppUpdate = null }
+            }) { Text("Atualizar") } },
+            dismissButton = { TextButton(onClick = { pendingAppUpdate = null }) { Text("Depois") } })
     }
 
     suspend fun refreshLibrary(online: Boolean = false) {
@@ -194,20 +245,21 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
             if (metadata.pending().isNotEmpty()) showConflictNotice = true
         } catch (error: kotlinx.coroutines.CancellationException) { throw error }
         catch (_: Exception) { catalogStatus = "A atualização não foi concluída. Tente novamente." }
-        finally { loading = false }
+        finally { loading = false; catalogLoaded = true }
     }
 
     LaunchedEffect(Unit) { refreshLibrary(online = !liveCatalog.hasCatalog(BuildConfig.ARTIST_FILTER)) }
     LaunchedEffect(changeCounter) {
         if (changeCounter > 0) refreshLibrary()
     }
-    val refreshAll: () -> Unit = { pendingCatalog = null; editScope.launch { refreshLibrary(online = true) }; Unit }
+    val refreshAll: () -> Unit = { pendingCatalog = null; editScope.launch { checkAppUpdate() }; editScope.launch { refreshLibrary(online = true) }; Unit }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, automaticCatalogCheck) {
         if (!automaticCatalogCheck) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             CatalogAutoCheck.afterOpen {
+                launch { checkAppUpdate() }
                 // A new foreground session restarts the 30-second timer. Never run alongside a refresh.
                 while (loading) kotlinx.coroutines.delay(250)
                 if (pendingCatalog == null) {
@@ -242,6 +294,47 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
     val controller = playback.controller
     val currentTrack = allTracks.find { it.id == controller?.currentMediaItem?.mediaId }
 
+    var sharedTrack by remember { mutableStateOf<Track?>(null) }
+    var linkError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sharedUri, visibleArtists, loading, catalogLoaded) {
+        val uri = sharedUri ?: return@LaunchedEffect
+        val target = SharedContent.parse(uri)
+        if (target == null) {
+            linkError = "Link de música ou álbum inválido."
+            consumeSharedUri()
+        } else if (BuildConfig.ARTIST_FILTER.isNotBlank() && !BuildConfig.ARTIST_FILTER.equals(target.artist, true)) {
+            linkError = "Este conteúdo pertence a outro projeto. Abra o link no FREZZAMUSIC ou no aplicativo da banda."
+            consumeSharedUri()
+        } else if (!loading && catalogLoaded) {
+            val albums = visibleArtists.filter { it.name.equals(target.artist, true) }.flatMap { it.albums }
+            val found = albums.filter { a ->
+                if (target.kind == "album") a.tracks.any { it.folder?.let { id -> SharedContent.matches(target, id) } == true }
+                else a.tracks.any { it.remoteFileId?.let { id -> SharedContent.matches(target, id) } == true }
+            }.singleOrNull()
+            if (found != null) {
+                tab = AppTab.ONLINE
+                playerExpanded = false
+                selectedAlbum = found
+                sharedTrack = if (target.kind == "track") found.tracks.first { it.remoteFileId?.let { id -> SharedContent.matches(target, id) } == true } else null
+            } else linkError = "Conteúdo não encontrado. Atualize a biblioteca e abra o link novamente."
+            consumeSharedUri()
+        }
+    }
+    if (sharedTrack != null) {
+        val track = sharedTrack!!
+        AlertDialog(onDismissRequest = { sharedTrack = null }, title = { Text(track.title) },
+            text = { Text(track.artist + " • " + track.album) },
+            confirmButton = { TextButton(enabled = controller != null, onClick = {
+                playback.play(track, selectedAlbum?.tracks ?: listOf(track))
+                fullPlayerPage = 0; playerExpanded = true; sharedTrack = null
+            }) { Text("Ouvir música") } },
+            dismissButton = { TextButton(onClick = { sharedTrack = null }) { Text("Ver álbum") } })
+    }
+    if (linkError != null) AlertDialog(onDismissRequest = { linkError = null },
+        title = { Text("Link compartilhado") }, text = { Text(linkError!!) },
+        confirmButton = { TextButton(onClick = { linkError = null; refreshAll() }) { Text("Atualizar biblioteca") } },
+        dismissButton = { TextButton(onClick = { linkError = null }) { Text("Fechar") } })
+
     Scaffold(
         bottomBar = {
             Column {
@@ -268,7 +361,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                             selected = tab == item,
                             onClick = { tab = item; selectedAlbum = null; playerExpanded = false },
                             icon = { Icon(icon, contentDescription = null) },
-                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> if (BuildConfig.PROJECT_MODE == "SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER.ifBlank { "Externas" }; AppTab.PLAYLISTS -> "Listas"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(when(item){ AppTab.HOME -> "Início"; AppTab.LIBRARY -> "Locais"; AppTab.ONLINE -> if (BuildConfig.PROJECT_MODE == "SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER.ifBlank { "Online" }; AppTab.PLAYLISTS -> "Listas"; AppTab.MORE -> "Mais" }, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
@@ -281,9 +374,9 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                 AppTab.LIBRARY -> LibraryScreen(visibleLocalTracks, query, { query = it }, { playback.play(it, visibleLocalTracks); fullPlayerPage=0; playerExpanded=true }, user, pickArtistImage, onEdit = { editingTrack = it })
                 AppTab.ONLINE -> OnlineScreen(visibleArtists, selectedAlbum, { selectedAlbum = it }, { selectedAlbum = null }, { track, album -> playback.play(track, album.tracks); fullPlayerPage=0; playerExpanded=true }, user, downloads, { track, album -> purchaseInitialTrack=track; purchaseInitialAlbum=album; showPurchase=true }, refresh = refreshAll, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus)
                 AppTab.PLAYLISTS -> CollectionsScreen(user, allTracks, playback, onPlay = { track, tracks -> playback.play(track, tracks); fullPlayerPage=0; playerExpanded=true })
-                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled })
+                AppTab.MORE -> MoreScreen(roots, { pickFolder { changeCounter++ } }, { repo.remove(it); changeCounter++ }, refreshAll, downloads, settings, playback, onMyPurchases = { showMyPurchases = true }, refreshing = loading || checkingCatalog, catalogStatus = catalogStatus, automaticCheck = automaticCatalogCheck, setAutomaticCheck = { enabled -> automaticCatalogCheck = enabled; settings.autoCatalogCheck = enabled }, checkAppUpdate = checkAppUpdateManually, checkingAppUpdate = checkingAppUpdate, appUpdateStatus = appUpdateStatus)
             }
-            pendingCatalog?.let { preview ->
+            pendingCatalog?.takeIf { pendingAppUpdate == null }?.let { preview ->
                 AlertDialog(
                     onDismissRequest = { pendingCatalog = null; catalogStatus = "Atualização adiada. Sua biblioteca foi mantida." },
                     title = { Text("Atualizar a biblioteca?") },
@@ -333,7 +426,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, requestFolderWrite: (Track, (Uri
                     MetadataConflictReview(metadata, onClose = { showConflictReview = false }, onApplied = { metadataRevision++ })
                 }
             }
-            if (showConflictNotice && !showConflictReview) AlertDialog(
+            if (showConflictNotice && !showConflictReview && pendingAppUpdate == null && pendingCatalog == null) AlertDialog(
                 onDismissRequest = { showConflictNotice = false },
                 title = { Text("Alterações encontradas") },
                 text = { Text("Existem "+metadata.pending().size+" divergências entre suas edições e as fontes. Suas edições foram preservadas.") },
@@ -539,18 +632,19 @@ private fun LibraryScreen(tracks: List<Track>, query: String, setQuery: (String)
 }
 @Composable
 private fun OnlineScreen(artists: List<Artist>, album: Album?, open: (Album) -> Unit, back: () -> Unit, play: (Track, Album) -> Unit, user: UserLibraryRepository, downloads: OfflineDownloadRepository, buy: (Track?, Album?) -> Unit, refresh: () -> Unit, refreshing: Boolean, catalogStatus: String) {
+ val shareContext = androidx.compose.ui.platform.LocalContext.current
  val favorites=rememberFavorites(user)
 
  val allAlbums=artists.flatMap{it.albums}; val tracks=allAlbums.flatMap{it.tracks}; var mode by remember{mutableStateOf("Álbuns")};var query by remember{mutableStateOf("")};var artistFilter by remember{mutableStateOf("Todas")};var artistMenu by remember{mutableStateOf(false)};var sort by remember{mutableStateOf("Título")};var ascending by remember{mutableStateOf(true)};var sortMenu by remember{mutableStateOf(false)}
  val artistOptions=listOf("Todas")+artists.map{it.name}.sorted()
- if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist)};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,favorites.contains(t.id),{play(t,album)},{user.toggleFavorite(t)},downloads,{buy(t,album)})}}
+ if(album!=null) LazyColumn(contentPadding=PaddingValues(16.dp)){item{TextButton(back){Icon(Icons.Default.ArrowBack,null);Text("Álbuns")};Card(Modifier.fillMaxWidth().aspectRatio(1f)){val art=album.artwork?:album.tracks.firstOrNull()?.artwork;if(!art.isNullOrBlank())AsyncImage(art,"Capa de "+album.title,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(90.dp))}};Text(album.title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp));Text(album.artist);SharedContent.albumUrl(album)?.let { link -> TextButton(onClick = { SharedContent.share(shareContext, album.artist + " — " + album.title, link) }) { Icon(Icons.Default.Share, null); Text(" Compartilhar álbum") } }};items(album.tracks,key={it.id}){t->OnlineTrackRow(t,favorites.contains(t.id),{play(t,album)},{user.toggleFavorite(t)},downloads,{buy(t,album)})}}
  else Column{
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
    Text(catalogStatus, Modifier.weight(1f), style=MaterialTheme.typography.bodySmall)
    IconButton(onClick=refresh, enabled=!refreshing) { Icon(Icons.Default.Refresh, "Atualizar catálogo online") }
   }
 
-  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text(if (BuildConfig.ARTIST_FILTER.isBlank()) "Buscar mídias externas" else "Buscar em ${if(BuildConfig.PROJECT_MODE=="SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER}")},leadingIcon={Icon(Icons.Default.Search,null)})
+  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(12.dp),singleLine=true,label={Text(if (BuildConfig.ARTIST_FILTER.isBlank()) "Buscar músicas online" else "Buscar em ${if(BuildConfig.PROJECT_MODE=="SOLASIAS") "SOLASIAS" else BuildConfig.ARTIST_FILTER}")},leadingIcon={Icon(Icons.Default.Search,null)})
   if(mode=="Músicas"||mode=="Álbuns")Column(Modifier.padding(horizontal=12.dp)){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.weight(1f)){OutlinedButton({artistMenu=true},modifier=Modifier.fillMaxWidth()){Text(if(artistFilter=="Todas")"Todos os artistas" else artistFilter,maxLines=1,overflow=TextOverflow.Ellipsis);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(artistMenu,{artistMenu=false}){artistOptions.forEach{a->DropdownMenuItem(text={Text(if(a=="Todas")"Todos os artistas" else a)},onClick={artistFilter=a;artistMenu=false})}}};Spacer(Modifier.width(8.dp));Box(Modifier.weight(1f)){OutlinedButton({sortMenu=true},modifier=Modifier.fillMaxWidth()){Text("Ordenar: $sort",maxLines=1);Icon(Icons.Default.ArrowDropDown,null)};DropdownMenu(sortMenu,{sortMenu=false}){listOf("Título","Artista","Álbum","Data").forEach{o->DropdownMenuItem(text={Text(o)},onClick={sort=o;sortMenu=false})}}};IconButton({ascending=!ascending}){Icon(if(ascending)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,if(ascending)"Crescente" else "Decrescente")}}}
   val modes=listOf("Músicas","Artistas","Álbuns");ScrollableTabRow(modes.indexOf(mode)){modes.forEach{m->Tab(mode==m,{mode=m},text={Text(m,maxLines=1)})}}
   val ft=tracks.filter{artistFilter=="Todas"||it.artist==artistFilter}.filter{query.isBlank()||listOf(it.title,it.artist,it.album).any{s->s.contains(query,true)}}.sortedWith(when(sort){"Artista"->compareBy(String.CASE_INSENSITIVE_ORDER){it.artist};"Álbum"->compareBy(String.CASE_INSENSITIVE_ORDER){it.album};"Data"->compareBy<Track>{it.dateMs?:0L};else->compareBy(String.CASE_INSENSITIVE_ORDER){it.title}}).let{if(ascending)it else it.reversed()}
@@ -618,7 +712,7 @@ private fun CollectionsScreen(user: UserLibraryRepository, all: List<Track>, pla
 }
 
 @Composable
-private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit) {
+private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Unit, refresh: () -> Unit, downloads: OfflineDownloadRepository, settings: SettingsRepository, playback: PlaybackController, onMyPurchases: () -> Unit, refreshing: Boolean, catalogStatus: String, automaticCheck: Boolean, setAutomaticCheck: (Boolean) -> Unit, checkAppUpdate: () -> Unit, checkingAppUpdate: Boolean, appUpdateStatus: String) {
     var speed by remember { mutableFloatStateOf(settings.speed) }
     var crossfade by remember { mutableIntStateOf(settings.crossfadeSeconds) }
     var downloadRevision by remember { mutableIntStateOf(0) }
@@ -643,9 +737,17 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
         item {
             ListItem(
                 headlineContent = { Text("Verificar atualizações automaticamente") },
-                supportingContent = { Text("Após 30 segundos ao abrir o app. A biblioteca só muda com sua confirmação.") },
+                supportingContent = { Text("Após 30 segundos ao abrir o app, verifica músicas, álbuns e uma nova versão do aplicativo. Alterações precisam da sua confirmação.") },
                 trailingContent = { Switch(checked = automaticCheck, onCheckedChange = setAutomaticCheck) }
             )
+        }
+        item {
+            Text("Atualização do aplicativo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Versão instalada: ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+            if (appUpdateStatus.isNotBlank()) Text(appUpdateStatus, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = checkAppUpdate, enabled = !checkingAppUpdate) {
+                Text(if (checkingAppUpdate) "Verificando…" else "Verificar atualização do app")
+            }
         }
         items(folders, key = { it.toString() }) { uri ->
             ListItem(
@@ -682,6 +784,7 @@ private fun MoreScreen(folders: List<Uri>, add: () -> Unit, remove: (Uri) -> Uni
 
 @Composable
 private fun OnlineTrackRow(track: Track, favorite: Boolean, play: () -> Unit, toggleFavorite: () -> Unit, downloads: OfflineDownloadRepository, buy: () -> Unit) {
+    val shareContext = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember(track.id) { mutableStateOf(downloads.state(track)) }
     var error by remember(track.id) { mutableStateOf<String?>(null) }
@@ -691,6 +794,7 @@ private fun OnlineTrackRow(track: Track, favorite: Boolean, play: () -> Unit, to
         leadingContent = { if (!track.artwork.isNullOrBlank()) AsyncImage(model=track.artwork,contentDescription=null,modifier=Modifier.size(48.dp),contentScale=ContentScale.Crop) else Icon(Icons.Default.Cloud, null) },
         trailingContent = {
             Row {
+                SharedContent.trackUrl(track)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, track.artist + " — " + track.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } }
                 IconButton(onClick = buy) { Icon(Icons.Default.Download, "Opções de download") }
                 IconButton(onClick = toggleFavorite) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null) }
             }

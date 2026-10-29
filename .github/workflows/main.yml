@@ -20,7 +20,7 @@ on:
 
 jobs:
   build:
-    name: Build Debug APKs
+    name: Test and build optimized production APKs
     runs-on: ubuntu-latest
 
     steps:
@@ -41,16 +41,20 @@ jobs:
       - name: Test catalog parsing and identity
         run: gradle :app:testFrezzamusicDebugUnitTest --stacktrace
 
-      - name: Build all debug variants
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Build optimized production variants
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Check release manifests and R8 output
+        run: |
+          python3 scripts/verify-release-build.py
 
       - name: Prepare APK names
         if: success()
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/frezzamusic/debug/app-frezzamusic-debug.apk dist/FREZZAMUSIC.apk
-          cp app/build/outputs/apk/solasias/debug/app-solasias-debug.apk dist/SOLASIAS.apk
-          cp app/build/outputs/apk/thefrezza/debug/app-thefrezza-debug.apk dist/theFrezza.apk
+          cp app/build/outputs/apk/frezzamusic/release/app-frezzamusic-release-unsigned.apk dist/FREZZAMUSIC.apk
+          cp app/build/outputs/apk/solasias/release/app-solasias-release-unsigned.apk dist/SOLASIAS.apk
+          cp app/build/outputs/apk/thefrezza/release/app-thefrezza-release-unsigned.apk dist/theFrezza.apk
 
       - name: Upload FREZZAMUSIC APK
         if: success()
