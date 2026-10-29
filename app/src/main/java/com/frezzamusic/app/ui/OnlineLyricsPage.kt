@@ -64,13 +64,9 @@ import java.util.Locale
         }
         if (cues.isNotEmpty()) {
             val current = SubtitleFormat.current(cues, pos)
-            val state = androidx.compose.foundation.lazy.rememberLazyListState()
-            LaunchedEffect(current) { if (current >= 0) state.animateScrollToItem(current) }
-            LazyColumn(state = state, modifier = Modifier.weight(1f), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                itemsIndexed(cues) { i, cue -> Text(cue.text,
-                    style = if (i == current) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (i == current) FontWeight.Bold else FontWeight.Normal,
-                    color = if (i == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+            val focus = if (current >= 0) current else cues.indexOfLast { it.startMs <= pos }.coerceAtLeast(0)
+            key(track?.id, selected?.id) {
+                Box(Modifier.weight(1f)) { SyncedLyricsView(cues.map { it.text }, current, focus) }
             }
         } else if (!loading) Box(Modifier.weight(1f)) { LocalLyricsPage(track, pos) }
     }
