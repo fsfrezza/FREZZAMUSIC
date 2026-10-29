@@ -1,6 +1,11 @@
 package com.frezzamusic.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
@@ -48,13 +53,20 @@ import java.util.Locale
         finally { loading = false }
     }
     Column(Modifier.fillMaxSize()) {
-        if (languages.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp)) {
-            TextButton(onClick = { menu = true }) { Text("Idioma: ${selected?.label.orEmpty()} ▾") }
+        if (languages.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
+          Box {
+            OutlinedButton(onClick = { menu = true }, shape = RoundedCornerShape(50), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(selected?.label.orEmpty(), style = MaterialTheme.typography.labelLarge)
+                Icon(Icons.Default.ArrowDropDown, contentDescription = "Escolher idioma", modifier = Modifier.size(18.dp))
+            }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 languages.forEach { language -> DropdownMenuItem(text = { Text(language.label) }, onClick = {
                     selected = language; menu = false; prefs.edit().putString("language", language.language).apply()
                 }) }
             }
+        }
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         val message = error

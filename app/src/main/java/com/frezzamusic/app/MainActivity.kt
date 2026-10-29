@@ -351,17 +351,14 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
 
     Scaffold(
         bottomBar = {
+          if (!playerExpanded || showPurchase) {
             Column {
-                if(playerExpanded && fullPlayerPage==0) {
-                    PlayerTransportBar(playback, controller?.isPlaying == true)
-                } else {
-                    MiniPlayer(
-                        track = currentTrack,
-                        playing = controller?.isPlaying == true,
-                        toggle = playback::toggle,
-                        expand = { if (currentTrack != null) { fullPlayerPage=0; playerExpanded = true } }
-                    )
-                }
+                MiniPlayer(
+                    track = currentTrack,
+                    playing = controller?.isPlaying == true,
+                    toggle = playback::toggle,
+                    expand = { if (currentTrack != null) { fullPlayerPage=0; playerExpanded = true } }
+                )
                 NavigationBar {
                     val tabs = listOf(
                         AppTab.HOME to Icons.Default.Home,
@@ -380,6 +377,7 @@ fun FrezzaMusicApp(repo: FolderMusicRepository, sharedUri: Uri?, consumeSharedUr
                     }
                 }
             }
+          }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {

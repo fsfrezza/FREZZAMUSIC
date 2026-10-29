@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,11 +79,16 @@ import kotlinx.coroutines.delay
      WifiCast.syncScreen(shareContext,page,true,track.lrc,track.title,track.artist)
    }
  }
- Column(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
+ PlayerBackdrop(track) {
+ Column(Modifier.fillMaxSize().padding(horizontal=16.dp,vertical=8.dp),horizontalAlignment=Alignment.CenterHorizontally){
   var favoriteRevision by remember{mutableIntStateOf(0)};val favorite=track?.id?.let{user.favorites().contains(it)}==true
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){IconButton(onClose){Icon(Icons.Default.KeyboardArrowDown,"Fechar")};track?.let { song -> SharedContent.trackUrl(song)?.let { link -> IconButton(onClick = { SharedContent.share(shareContext, song.artist + " — " + song.title, link) }) { Icon(Icons.Default.Share, "Compartilhar música") } } };Text("Tocando agora",Modifier.weight(1f),fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis);IconButton(onClick={track?.let{user.toggleFavorite(it.id);favoriteRevision++}},enabled=track!=null){Icon(if(favorite)Icons.Default.Favorite else Icons.Default.FavoriteBorder,"Favorita")};IconButton(onClick={playlistPicker=true},enabled=track!=null){Icon(Icons.Default.PlaylistAdd,"Adicionar à playlist")};if(track?.remote==true)IconButton(onClick={support=true}){Icon(Icons.Default.Download,"Apoiar e baixar")}}
-  TabRow(page){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
-  when(page){0->PlayerPage(track,pc,pos,dur){pos=it};1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
+  TabRow(page, containerColor = Color.Transparent){Tab(page==0,{page=0},text={Text("Tocar",maxLines=1)});Tab(page==1,{page=1},text={Text("Letras")});Tab(page==2,{page=2},text={Text("Fila")});Tab(page==3,{page=3},text={Text("Áudio")})}
+  Box(Modifier.weight(1f).fillMaxWidth()) {
+   when(page){0->PlayerPage(track);1->LyricsPage(track,pos);2->QueuePage(pc);else->AudioPage(pc,requestVisualizerAccess)}
+  }
+  ExpandedPlayerFooter(track, pc, pos, dur)
+ }
  }
  if(showDlnaPicker) AlertDialog(
    onDismissRequest={showDlnaPicker=false},
@@ -120,7 +126,16 @@ import kotlinx.coroutines.delay
  if(playlistPicker&&track!=null)AlertDialog(onDismissRequest={playlistPicker=false},title={Text("Adicionar à lista")},text={Column{val playlists=user.playlists();if(playlists.isEmpty())Text("Nenhuma lista criada.") else playlists.forEach{pl->TextButton(onClick={user.addToPlaylist(pl.id,track.id);playlistPicker=false},modifier=Modifier.fillMaxWidth()){Text(pl.name)}}}},confirmButton={TextButton({playlistPicker=false}){Text("Fechar")}})
  if(support)AlertDialog(onDismissRequest={support=false},icon={Icon(Icons.Default.Favorite,null)},title={Text("Gostou desta música? Apoie o projeto")},text={Text("Todas as músicas podem ser ouvidas gratuitamente. Sua contribuição ajuda a manter o aplicativo e a produção de novas músicas. Como agradecimento, o download em alta qualidade será liberado quando o sistema de contribuições estiver ativo.\n\nFaixa: ${SupportPricing.formatBrl(track?.downloadPriceBrl ?: SupportPricing.TRACK_PRICE_BRL)}. Álbuns: ${SupportPricing.formatBrl(SupportPricing.albumPrice(8))} a ${SupportPricing.formatBrl(SupportPricing.albumPrice(17))}, conforme a quantidade de faixas.")},confirmButton={TextButton({support=false}){Text("Entendi")}},dismissButton={TextButton({support=false}){Text("Agora não")}})
 }
-@Composable private fun PlayerPage(t:Track?,pc:PlaybackController,pos:Long,dur:Long,setPos:(Long)->Unit){val p=pc.controller;Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally){Spacer(Modifier.height(8.dp));if(!t?.artwork.isNullOrBlank())Card(Modifier.fillMaxWidth().heightIn(max=360.dp).aspectRatio(1f)){AsyncImage(model=t?.artwork,contentDescription="Capa de ${t?.album.orEmpty()}",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)} else Card(Modifier.fillMaxWidth().heightIn(max=360.dp).aspectRatio(1f)){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(Icons.Default.Album,null,Modifier.size(190.dp),tint=MaterialTheme.colorScheme.primary)}};Spacer(Modifier.height(8.dp));VisualizerView();Spacer(Modifier.height(8.dp));Text(t?.title?:"Nada tocando",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold,maxLines=2,overflow=TextOverflow.Ellipsis);Text(t?.artist?:"",style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis);Text(t?.album?:"",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis);Slider(pos.coerceAtMost(dur.coerceAtLeast(1)).toFloat(),{setPos(it.toLong())},onValueChangeFinished={pc.seek(pos)},valueRange=0f..dur.coerceAtLeast(1).toFloat());Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(fmt(pos));Text("-"+fmt((dur-pos).coerceAtLeast(0)))};Spacer(Modifier.height(8.dp))}}
+@Composable private fun PlayerPage(t:Track?) {
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+  Spacer(Modifier.height(20.dp))
+  if (!t?.artwork.isNullOrBlank()) Card(Modifier.fillMaxWidth().heightIn(max = 340.dp).aspectRatio(1f)) {
+   AsyncImage(model = t?.artwork, contentDescription = "Capa de ${t?.album.orEmpty()}", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+  } else Icon(Icons.Default.Album, null, Modifier.size(180.dp), tint = MaterialTheme.colorScheme.primary)
+  Spacer(Modifier.height(16.dp)); VisualizerView()
+  Text(t?.album.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+ }
+}
 @Composable internal fun LocalLyricsPage(t: Track?, pos: Long) {
  val lrc = t?.lrc
  var offset by remember(t?.id) { mutableLongStateOf(0L) }

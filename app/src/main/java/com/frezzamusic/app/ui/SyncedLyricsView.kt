@@ -1,5 +1,7 @@
 package com.frezzamusic.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -33,8 +36,7 @@ import kotlinx.coroutines.flow.first
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val rowHeight = maxHeight / 3
-        val edgePadding = (maxHeight - rowHeight) / 2
+        val edgePadding = maxHeight / 2
         val target = focus.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
         LaunchedEffect(target, current, browsing, maxHeight) {
             if (browsing || lines.isEmpty()) return@LaunchedEffect
@@ -69,16 +71,26 @@ import kotlinx.coroutines.flow.first
         ) {
             itemsIndexed(lines) { index, text ->
                 val active = index == current
+                val color by animateColorAsState(
+                    targetValue = when {
+                        active -> MaterialTheme.colorScheme.primary
+                        index < focus -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                    }, animationSpec = tween(240), label = "Lyric emphasis"
+                )
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = rowHeight).padding(horizontal = 24.dp, vertical = 12.dp),
+                    Modifier.fillMaxWidth()
+                        .alpha(if (browsing || kotlin.math.abs(index - focus) <= 1) 1f else 0f)
+                        .padding(horizontal = 8.dp, vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text,
                         style = if (active) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge,
-                        fontSize = if (active) 26.sp else 16.sp,
+                        fontSize = if (active) 24.sp else 16.sp,
+                        lineHeight = if (active) 32.sp else 24.sp,
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = color,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
