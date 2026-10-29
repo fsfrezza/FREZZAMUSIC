@@ -36,9 +36,10 @@ import kotlinx.coroutines.flow.first
         val rowHeight = maxHeight / 3
         val edgePadding = (maxHeight - rowHeight) / 2
         val target = focus.coerceIn(0, (lines.size - 1).coerceAtLeast(0))
-        LaunchedEffect(target, browsing, maxHeight) {
+        LaunchedEffect(target, current, browsing, maxHeight) {
             if (browsing || lines.isEmpty()) return@LaunchedEffect
             snapshotFlow { state.layoutInfo.totalItemsCount }.first { it == lines.size }
+            withFrameNanos { } // Measure the new font size before computing the center.
             // Avoid jumping when the next line is already on screen.
             if (state.layoutInfo.visibleItemsInfo.none { it.index == target }) {
                 state.animateScrollToItem(target)
