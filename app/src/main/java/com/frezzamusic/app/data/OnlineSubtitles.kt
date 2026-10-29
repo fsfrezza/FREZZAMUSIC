@@ -32,7 +32,7 @@ internal object SubtitleFormat {
     fun key(name: String): String = Normalizer.normalize(DriveFolderParser.displayTitle(name), Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"), "")
     fun match(name: String, title: String): String? {
-        val m = Regex("(?i)^(.+)[_. -]([a-z]{2,3}(?:[-_][a-z]{2})?)\\.srt$").matchEntire(name) ?: return null
+        val m = Regex("(?i)^(.+?)[_. -]([a-z]{2,3}(?:[-_][a-z]{2})?)\\.srt$").matchEntire(name) ?: return null
         return m.groupValues[2].replace('_', '-').lowercase(Locale.ROOT).takeIf { key(m.groupValues[1]) == key(title) }
     }
 }
